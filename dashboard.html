@@ -1,0 +1,773 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>MisinfoLens · GPU Research Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+<style>
+:root {
+  --bg:        #08090c;
+  --surface:   #0f1117;
+  --surface2:  #161922;
+  --surface3:  #1e2230;
+  --border:    #252a38;
+  --border2:   #2e3447;
+  --accent:    #4f8cff;
+  --accent2:   #6ee7b7;
+  --danger:    #f87171;
+  --warn:      #fbbf24;
+  --safe:      #34d399;
+  --muted:     #8892a4;
+  --text:      #e8eaf0;
+  --text2:     #b0b8cc;
+  --mono:      'Space Mono', monospace;
+  --sans:      'DM Sans', sans-serif;
+  --radius:    10px;
+  --radius-lg: 16px;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 15px;
+  line-height: 1.65;
+  min-height: 100vh;
+}
+
+/* ── Noise overlay ── */
+body::before {
+  content: '';
+  position: fixed; inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+  pointer-events: none; z-index: 0; opacity: 0.5;
+}
+
+/* ── Layout ── */
+.shell { position: relative; z-index: 1; max-width: 1120px; margin: 0 auto; padding: 0 24px 80px; }
+
+/* ── Header ── */
+header {
+  padding: 40px 0 32px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 36px;
+  display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: 16px;
+}
+.logo {
+  font-family: var(--mono);
+  font-size: 13px;
+  letter-spacing: 0.12em;
+  color: var(--accent);
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+header h1 {
+  font-size: 28px; font-weight: 700; letter-spacing: -0.5px;
+  background: linear-gradient(135deg, #e8eaf0 0%, #8892a4 100%);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+}
+header p { color: var(--muted); font-size: 14px; margin-top: 4px; }
+
+.status-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.badge {
+  font-family: var(--mono);
+  font-size: 11px; letter-spacing: 0.05em;
+  padding: 4px 10px; border-radius: 4px;
+  border: 1px solid var(--border2);
+  background: var(--surface2);
+  color: var(--muted);
+  transition: all 0.3s;
+}
+.badge.online  { border-color: #34d39940; color: var(--safe); background: #34d39910; }
+.badge.offline { border-color: #f8717140; color: var(--danger); background: #f8717110; }
+.badge.gpu-on  { border-color: #4f8cff40; color: var(--accent); background: #4f8cff10; }
+
+/* ── Input section ── */
+.input-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 28px;
+  margin-bottom: 32px;
+  position: relative;
+  overflow: hidden;
+}
+.input-card::before {
+  content: '';
+  position: absolute; top: 0; left: 0; right: 0; height: 1px;
+  background: linear-gradient(90deg, transparent, var(--accent)40, transparent);
+}
+.input-card h2 { font-size: 16px; font-weight: 600; margin-bottom: 16px; color: var(--text); }
+
+.url-row { display: flex; gap: 10px; }
+.url-input {
+  flex: 1;
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  color: var(--text);
+  padding: 12px 16px;
+  border-radius: var(--radius);
+  font-family: var(--mono);
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.url-input:focus { border-color: var(--accent); }
+.url-input::placeholder { color: var(--muted); }
+
+.btn-analyze {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  padding: 12px 24px;
+  border-radius: var(--radius);
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+  display: flex; align-items: center; gap: 8px;
+}
+.btn-analyze:hover:not(:disabled) { background: #6ea3ff; transform: translateY(-1px); }
+.btn-analyze:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+.status-line { margin-top: 12px; font-size: 13px; color: var(--muted); min-height: 20px; }
+.status-line.ok  { color: var(--safe); }
+.status-line.err { color: var(--danger); }
+
+/* ── Summary strip ── */
+.summary-strip {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px; margin-bottom: 32px;
+}
+.stat-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+}
+.stat-card .val {
+  font-family: var(--mono);
+  font-size: 26px; font-weight: 700; line-height: 1;
+  margin-bottom: 4px;
+}
+.stat-card .lbl { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
+.val.red    { color: var(--danger); }
+.val.yellow { color: var(--warn); }
+.val.green  { color: var(--safe); }
+.val.blue   { color: var(--accent); }
+
+/* ── Video title bar ── */
+.video-bar {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 20px;
+  margin-bottom: 24px;
+  display: flex; align-items: center; gap: 12px;
+}
+.video-icon { font-size: 20px; }
+.video-bar .title { font-weight: 600; font-size: 15px; }
+.video-bar .meta  { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+/* ── Claims section ── */
+.section-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 16px;
+}
+.section-header h3 { font-size: 16px; font-weight: 600; }
+.section-header .count { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+
+/* Filter tabs */
+.filter-tabs { display: flex; gap: 6px; margin-bottom: 20px; flex-wrap: wrap; }
+.tab {
+  font-size: 12px; font-family: var(--mono);
+  padding: 5px 12px; border-radius: 4px;
+  border: 1px solid var(--border2);
+  background: transparent; color: var(--muted);
+  cursor: pointer; transition: all 0.15s;
+}
+.tab:hover { border-color: var(--accent); color: var(--accent); }
+.tab.active { background: var(--accent)20; border-color: var(--accent); color: var(--accent); }
+.tab.red    { --c: var(--danger); }
+.tab.yellow { --c: var(--warn); }
+.tab.green  { --c: var(--safe); }
+.tab.red.active    { background: #f8717120; border-color: var(--danger); color: var(--danger); }
+.tab.yellow.active { background: #fbbf2420; border-color: var(--warn); color: var(--warn); }
+.tab.green.active  { background: #34d39920; border-color: var(--safe); color: var(--safe); }
+
+/* ── Claim card ── */
+.claim-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  margin-bottom: 16px;
+  overflow: hidden;
+  transition: border-color 0.2s;
+}
+.claim-card:hover { border-color: var(--border2); }
+.claim-card.red    { border-left: 3px solid var(--danger); }
+.claim-card.yellow { border-left: 3px solid var(--warn); }
+.claim-card.green  { border-left: 3px solid var(--safe); }
+
+.claim-header {
+  padding: 16px 20px;
+  cursor: pointer;
+  user-select: none;
+  display: flex; gap: 14px; align-items: flex-start;
+}
+.claim-header:hover { background: var(--surface2); }
+
+.verdict-pill {
+  flex-shrink: 0;
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  padding: 3px 8px; border-radius: 3px;
+  margin-top: 3px;
+}
+.verdict-pill.false        { background: #f8717120; color: var(--danger); border: 1px solid #f8717140; }
+.verdict-pill.true         { background: #34d39920; color: var(--safe); border: 1px solid #34d39940; }
+.verdict-pill.partially_true { background: #fbbf2420; color: var(--warn); border: 1px solid #fbbf2440; }
+.verdict-pill.not_applicable { background: #8892a420; color: var(--muted); border: 1px solid #8892a440; }
+.verdict-pill.unverified   { background: #4f8cff20; color: var(--accent); border: 1px solid #4f8cff40; }
+
+.claim-text-wrap { flex: 1; }
+.claim-text { font-size: 14px; color: var(--text); line-height: 1.6; }
+.claim-meta { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+
+.meta-chip {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.04em;
+  padding: 2px 7px; border-radius: 3px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+.meta-chip.risk-high   { color: var(--danger); border-color: #f8717130; background: #f8717108; }
+.meta-chip.risk-medium { color: var(--warn);   border-color: #fbbf2430; background: #fbbf2408; }
+.meta-chip.risk-low    { color: var(--safe);   border-color: #34d39930; background: #34d39908; }
+
+/* Risk bar */
+.risk-bar-wrap { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 100px; }
+.risk-bar-track { flex: 1; height: 4px; background: var(--surface3); border-radius: 2px; overflow: hidden; }
+.risk-bar-fill  { height: 100%; border-radius: 2px; transition: width 0.6s ease; }
+.risk-bar-fill.red    { background: var(--danger); }
+.risk-bar-fill.yellow { background: var(--warn); }
+.risk-bar-fill.green  { background: var(--safe); }
+
+.expand-icon { flex-shrink: 0; color: var(--muted); font-size: 14px; margin-top: 4px; transition: transform 0.2s; }
+.claim-card.open .expand-icon { transform: rotate(180deg); }
+
+/* ── Expanded body ── */
+.claim-body {
+  display: none;
+  border-top: 1px solid var(--border);
+}
+.claim-card.open .claim-body { display: block; }
+
+/* Tabs inside card */
+.inner-tabs { display: flex; border-bottom: 1px solid var(--border); }
+.inner-tab {
+  padding: 10px 18px;
+  font-size: 12px; font-family: var(--mono);
+  color: var(--muted);
+  cursor: pointer; border-bottom: 2px solid transparent;
+  transition: all 0.15s;
+}
+.inner-tab:hover { color: var(--text); }
+.inner-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+.inner-panel { display: none; padding: 20px; }
+.inner-panel.active { display: block; }
+
+/* Explanation panel */
+.explanation-text {
+  font-size: 13.5px; line-height: 1.75;
+  color: var(--text2);
+}
+.explanation-text strong { color: var(--text); }
+.explanation-text em { color: var(--muted); }
+
+/* NLI chart */
+.nli-bars { display: flex; flex-direction: column; gap: 10px; }
+.nli-row { display: flex; align-items: center; gap: 10px; }
+.nli-label { font-family: var(--mono); font-size: 11px; color: var(--muted); width: 100px; flex-shrink: 0; }
+.nli-track { flex: 1; height: 8px; background: var(--surface3); border-radius: 4px; overflow: hidden; }
+.nli-fill  { height: 100%; border-radius: 4px; transition: width 0.8s ease; }
+.nli-fill.entailment    { background: var(--safe); }
+.nli-fill.contradiction { background: var(--danger); }
+.nli-fill.neutral       { background: var(--muted); }
+.nli-pct { font-family: var(--mono); font-size: 11px; color: var(--text2); width: 38px; text-align: right; }
+
+/* Evidence list */
+.evidence-list { display: flex; flex-direction: column; gap: 12px; }
+.evidence-item {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+}
+.evidence-item .ev-title { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
+.evidence-item .ev-meta  { font-size: 11px; color: var(--muted); font-family: var(--mono); margin-bottom: 8px; display: flex; gap: 8px; flex-wrap: wrap; }
+.evidence-item .ev-snippet { font-size: 12.5px; color: var(--text2); line-height: 1.6; }
+.evidence-item .ev-link { font-size: 11px; color: var(--accent); text-decoration: none; font-family: var(--mono); }
+.evidence-item .ev-link:hover { text-decoration: underline; }
+.authority-badge {
+  display: inline-block;
+  font-family: var(--mono); font-size: 10px;
+  padding: 1px 6px; border-radius: 3px;
+}
+.authority-badge.high   { background: #34d39918; color: var(--safe); border: 1px solid #34d39940; }
+.authority-badge.medium { background: #fbbf2418; color: var(--warn); border: 1px solid #fbbf2440; }
+.authority-badge.low    { background: #8892a418; color: var(--muted); border: 1px solid #8892a440; }
+
+/* Empty state */
+.empty-state { text-align: center; padding: 60px 20px; color: var(--muted); }
+.empty-state .icon { font-size: 48px; margin-bottom: 12px; }
+.empty-state p { font-size: 14px; }
+
+/* ── Loader ── */
+.loader-overlay {
+  display: none;
+  position: fixed; inset: 0; z-index: 100;
+  background: rgba(8,9,12,0.8);
+  backdrop-filter: blur(8px);
+  align-items: center; justify-content: center;
+  flex-direction: column; gap: 20px;
+}
+.loader-overlay.active { display: flex; }
+.loader-ring {
+  width: 52px; height: 52px;
+  border: 3px solid var(--border2);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.loader-text { font-family: var(--mono); font-size: 13px; color: var(--muted); }
+
+/* ── Progress steps ── */
+.progress-steps { display: flex; flex-direction: column; gap: 8px; min-width: 260px; }
+.progress-step {
+  display: flex; align-items: center; gap: 10px;
+  font-family: var(--mono); font-size: 12px; color: var(--muted);
+}
+.progress-step .dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--border2); flex-shrink: 0;
+  transition: background 0.3s;
+}
+.progress-step.active .dot { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+.progress-step.done .dot   { background: var(--safe); }
+.progress-step.active { color: var(--text); }
+.progress-step.done   { color: var(--muted); }
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--surface); }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+
+/* ── Responsive ── */
+@media (max-width: 640px) {
+  .url-row { flex-direction: column; }
+  header { flex-direction: column; }
+  .summary-strip { grid-template-columns: 1fr 1fr; }
+}
+
+/* Animation: slide-in for claim cards */
+@keyframes slideIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.claim-card { animation: slideIn 0.3s ease both; }
+</style>
+</head>
+<body>
+
+<!-- Loading overlay -->
+<div class="loader-overlay" id="loaderOverlay">
+  <div class="loader-ring"></div>
+  <div class="progress-steps" id="progressSteps">
+    <div class="progress-step" id="step1"><span class="dot"></span>Extracting transcript…</div>
+    <div class="progress-step" id="step2"><span class="dot"></span>Identifying claims…</div>
+    <div class="progress-step" id="step3"><span class="dot"></span>Searching evidence databases…</div>
+    <div class="progress-step" id="step4"><span class="dot"></span>Running NLI analysis…</div>
+    <div class="progress-step" id="step5"><span class="dot"></span>Generating explanations…</div>
+  </div>
+</div>
+
+<div class="shell">
+  <!-- Header -->
+  <header>
+    <div>
+      <div class="logo">MisinfoLens v2</div>
+      <h1>GPU Research Dashboard</h1>
+      <p>Multi-source RAG · BART NLI · Evidence-backed verification</p>
+    </div>
+    <div class="status-row">
+      <span class="badge" id="badgeBackend">Connecting…</span>
+      <span class="badge" id="badgeGpu">GPU: —</span>
+      <span class="badge" id="badgeModel">Model: —</span>
+    </div>
+  </header>
+
+  <!-- Input -->
+  <div class="input-card">
+    <h2>Analyze YouTube Video for Misinformation</h2>
+    <div class="url-row">
+      <input class="url-input" type="url" id="videoUrl"
+             placeholder="https://youtu.be/... or https://youtube.com/watch?v=..."/>
+      <button class="btn-analyze" id="analyzeBtn" onclick="handleAnalyze()">
+        <span>▶</span> Analyze
+      </button>
+    </div>
+    <div class="status-line" id="statusLine"></div>
+  </div>
+
+  <!-- Results -->
+  <div id="resultsSection" style="display:none">
+    <!-- Video bar -->
+    <div class="video-bar" id="videoBar"></div>
+
+    <!-- Summary strip -->
+    <div class="summary-strip" id="summaryStrip"></div>
+
+    <!-- Claims -->
+    <div class="section-header">
+      <h3>Claims Analysis</h3>
+      <span class="count" id="claimCount"></span>
+    </div>
+    <div class="filter-tabs" id="filterTabs"></div>
+    <div id="claimsList"></div>
+  </div>
+
+  <!-- Empty -->
+  <div class="empty-state" id="emptyState">
+    <div class="icon">🔬</div>
+    <p>Paste a YouTube URL above to begin misinformation analysis.<br>
+    Claims are verified against Semantic Scholar, PubMed, arXiv, OpenAlex, and Wikipedia.</p>
+  </div>
+</div>
+
+<script>
+const API = 'http://localhost:8000';
+let allClaims = [];
+let activeFilter = 'all';
+
+// ── Status check ─────────────────────────────
+async function checkStatus() {
+  try {
+    const r = await fetch(`${API}/api/researcher/status`);
+    const d = await r.json();
+    const bb = document.getElementById('badgeBackend');
+    const bg = document.getElementById('badgeGpu');
+    const bm = document.getElementById('badgeModel');
+    bb.textContent = `Backend: ${d.status.toUpperCase()}`;
+    bb.className = 'badge ' + (d.status === 'ready' ? 'online' : 'offline');
+    bg.textContent = `GPU: ${d.gpu_available ? 'CUDA ON' : 'CPU'}`;
+    bg.className = 'badge ' + (d.gpu_available ? 'gpu-on' : '');
+    bm.textContent = `Models: ${d.models_loaded ? 'LOADED' : 'FALLBACK'}`;
+    bm.className = 'badge ' + (d.models_loaded ? 'online' : '');
+  } catch {
+    document.getElementById('badgeBackend').className = 'badge offline';
+    document.getElementById('badgeBackend').textContent = 'Backend: OFFLINE';
+  }
+}
+checkStatus();
+setInterval(checkStatus, 15000);
+
+// ── Progress animator ─────────────────────────
+let progressTimer = null;
+function startProgress() {
+  const steps = ['step1','step2','step3','step4','step5'];
+  let i = 0;
+  steps.forEach(s => {
+    const el = document.getElementById(s);
+    el.className = 'progress-step';
+  });
+  progressTimer = setInterval(() => {
+    if (i > 0) document.getElementById(steps[i-1]).className = 'progress-step done';
+    if (i < steps.length) {
+      document.getElementById(steps[i]).className = 'progress-step active';
+      i++;
+    }
+  }, 2200);
+}
+function stopProgress() {
+  clearInterval(progressTimer);
+  ['step1','step2','step3','step4','step5'].forEach(s => {
+    document.getElementById(s).className = 'progress-step done';
+  });
+}
+
+// ── Analyze ──────────────────────────────────
+async function handleAnalyze() {
+  const url = document.getElementById('videoUrl').value.trim();
+  if (!url) return;
+
+  document.getElementById('analyzeBtn').disabled = true;
+  document.getElementById('statusLine').textContent = '';
+  document.getElementById('resultsSection').style.display = 'none';
+  document.getElementById('emptyState').style.display = 'none';
+  document.getElementById('loaderOverlay').classList.add('active');
+  startProgress();
+
+  try {
+    const res = await fetch(`${API}/api/youtube/ingest`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({url})
+    });
+    const data = await res.json();
+    stopProgress();
+    document.getElementById('loaderOverlay').classList.remove('active');
+
+    if (!data.success) throw new Error(data.detail || 'Analysis failed');
+
+    setStatus('Analysis complete — ' + data.claims.length + ' claims verified', 'ok');
+    renderResults(data);
+  } catch (e) {
+    stopProgress();
+    document.getElementById('loaderOverlay').classList.remove('active');
+    setStatus('Error: ' + e.message, 'err');
+    document.getElementById('emptyState').style.display = 'block';
+  } finally {
+    document.getElementById('analyzeBtn').disabled = false;
+  }
+}
+
+function setStatus(msg, type='') {
+  const el = document.getElementById('statusLine');
+  el.textContent = msg;
+  el.className = 'status-line ' + type;
+}
+
+// ── Render results ────────────────────────────
+function renderResults(data) {
+  allClaims = data.claims || [];
+  document.getElementById('resultsSection').style.display = 'block';
+
+  // Video bar
+  const vb = document.getElementById('videoBar');
+  const meta = data.video_metadata || {};
+  vb.innerHTML = `
+    <span class="video-icon">📹</span>
+    <div>
+      <div class="title">${esc(data.video_title || 'Unknown Video')}</div>
+      <div class="meta">
+        ${meta.word_count ? meta.word_count.toLocaleString() + ' words' : ''}
+        ${meta.duration ? ' · ' + meta.duration : ''}
+        · Transcript: ${meta.transcript_method || 'yt-dlp'}
+        · ${allClaims.length} claims extracted
+      </div>
+    </div>
+  `;
+
+  // Summary strip
+  const misinfoCount = allClaims.filter(c => c.is_misinformation).length;
+  const highRisk     = allClaims.filter(c => c.risk_score >= 70).length;
+  const avgRisk      = allClaims.length ? (allClaims.reduce((s,c) => s + (c.risk_score||0), 0) / allClaims.length) : 0;
+  const gpu          = data.gpu_info?.cuda_available;
+
+  document.getElementById('summaryStrip').innerHTML = `
+    <div class="stat-card"><div class="val red">${misinfoCount}</div><div class="lbl">False Claims</div></div>
+    <div class="stat-card"><div class="val yellow">${highRisk}</div><div class="lbl">High-Risk Claims</div></div>
+    <div class="stat-card"><div class="val ${avgRisk>60?'red':avgRisk>35?'yellow':'green'}">${avgRisk.toFixed(1)}%</div><div class="lbl">Avg Risk Score</div></div>
+    <div class="stat-card"><div class="val blue">${allClaims.length}</div><div class="lbl">Claims Verified</div></div>
+    <div class="stat-card"><div class="val ${gpu?'blue':''}">●</div><div class="lbl">${gpu?'GPU CUDA':'CPU Mode'}</div></div>
+  `;
+
+  // Filter tabs
+  const redCount    = allClaims.filter(c => c.color === 'red' || c.risk_score >= 70).length;
+  const yellowCount = allClaims.filter(c => c.color === 'yellow' || (c.risk_score >= 40 && c.risk_score < 70)).length;
+  const greenCount  = allClaims.filter(c => c.color === 'green' || c.risk_score < 40).length;
+
+  document.getElementById('filterTabs').innerHTML = `
+    <button class="tab active" onclick="filterClaims('all', this)">All (${allClaims.length})</button>
+    <button class="tab red" onclick="filterClaims('red', this)">🔴 High Risk (${redCount})</button>
+    <button class="tab yellow" onclick="filterClaims('yellow', this)">🟡 Medium (${yellowCount})</button>
+    <button class="tab green" onclick="filterClaims('green', this)">🟢 Low Risk (${greenCount})</button>
+    <button class="tab" onclick="filterClaims('misinfo', this)">❌ Misinformation (${misinfoCount})</button>
+  `;
+
+  document.getElementById('claimCount').textContent = allClaims.length + ' claims';
+  renderClaims(allClaims);
+}
+
+function filterClaims(filter, btn) {
+  activeFilter = filter;
+  document.querySelectorAll('.filter-tabs .tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+
+  let filtered = allClaims;
+  if (filter === 'red')    filtered = allClaims.filter(c => (c.color === 'red' || c.risk_score >= 70));
+  if (filter === 'yellow') filtered = allClaims.filter(c => (c.color === 'yellow' || (c.risk_score >= 40 && c.risk_score < 70)));
+  if (filter === 'green')  filtered = allClaims.filter(c => (c.color === 'green' || c.risk_score < 40));
+  if (filter === 'misinfo') filtered = allClaims.filter(c => c.is_misinformation);
+
+  renderClaims(filtered);
+}
+
+function renderClaims(claims) {
+  const list = document.getElementById('claimsList');
+  if (!claims.length) {
+    list.innerHTML = '<div class="empty-state"><div class="icon">✅</div><p>No claims match this filter.</p></div>';
+    return;
+  }
+  list.innerHTML = claims.map((c, i) => buildClaimCard(c, i)).join('');
+}
+
+// ── Claim card builder ────────────────────────
+function buildClaimCard(c, idx) {
+  const color = c.color || (c.risk_score >= 70 ? 'red' : c.risk_score >= 40 ? 'yellow' : 'green');
+  const risk  = (c.risk_score || 0).toFixed(1);
+  const conf  = ((c.confidence || 0.5) * 100).toFixed(0);
+  const method = (c.analysis_method || '').replace(/_/g, ' ');
+  const validation = c.validation_result || 'unverified';
+
+  // Build tabs content
+  const nli = c.rag_verification?.verification_details?.nli_probabilities || {};
+  const evidenceSources = c.evidence_sources || c.rag_verification?.verification_details?.source_items || [];
+  const explanation = c.rag_verification?.verification_details?.comprehensive_analysis?.explanation
+    || c.rag_verification?.verification_details?.detailed_explanation
+    || c.rag_verification?.contradicted_fact
+    || '—';
+
+  // NLI bars
+  const contradiction = ((nli.contradiction || 0) * 100).toFixed(0);
+  const entailment    = ((nli.entailment || 0) * 100).toFixed(0);
+  const neutral_val   = ((nli.neutral || 0) * 100).toFixed(0);
+
+  // Evidence items
+  const evHtml = evidenceSources.length ? evidenceSources.map(ev => {
+    const auth = ev.authority || ev.authority_score || 0;
+    const authLabel = auth >= 0.85 ? 'high' : auth >= 0.70 ? 'medium' : 'low';
+    const snippet = esc((ev.summary || ev.snippet || '').substring(0, 300));
+    const authorsStr = Array.isArray(ev.authors) ? ev.authors.slice(0,2).map(esc).join(', ') : '';
+    return `
+    <div class="evidence-item">
+      <div class="ev-title">${esc(ev.title || 'Untitled')}</div>
+      <div class="ev-meta">
+        <span>${esc(ev.source || ev.source_name || '')}${ev.venue && ev.venue !== 'Unknown' ? ' · ' + esc(ev.venue) : ''}</span>
+        ${ev.year ? `<span>${ev.year}</span>` : ''}
+        ${authorsStr ? `<span>${authorsStr}</span>` : ''}
+        <span class="authority-badge ${authLabel}">Authority: ${(auth*100).toFixed(0)}%</span>
+        ${ev.supports_claim !== undefined ? `<span style="color:${ev.supports_claim ? 'var(--safe)' : 'var(--danger)'}">${ev.supports_claim ? '▲ supports' : '▼ contradicts'}</span>` : ''}
+      </div>
+      ${snippet ? `<div class="ev-snippet">"${snippet}"</div>` : ''}
+      ${ev.url ? `<a class="ev-link" href="${esc(ev.url)}" target="_blank" rel="noopener">→ View source</a>` : ''}
+    </div>`;
+  }).join('') : '<div style="color:var(--muted);font-size:13px;padding:8px 0">No evidence sources retrieved for this claim.</div>';
+
+  return `
+  <div class="claim-card ${color}" id="card-${idx}">
+    <div class="claim-header" onclick="toggleCard(${idx})">
+      <div class="verdict-pill ${validation}">${verdictLabel(validation)}</div>
+      <div class="claim-text-wrap">
+        <div class="claim-text">${esc(c.text)}</div>
+        <div class="claim-meta">
+          <span class="meta-chip risk-${color}">Risk: ${risk}%</span>
+          <span class="meta-chip">Confidence: ${conf}%</span>
+          <span class="meta-chip">${esc(c.domain || 'general')}</span>
+          <span class="meta-chip">${esc(method)}</span>
+          <div class="risk-bar-wrap">
+            <div class="risk-bar-track">
+              <div class="risk-bar-fill ${color}" style="width:${Math.min(risk,100)}%"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="expand-icon">▾</div>
+    </div>
+    <div class="claim-body">
+      <div class="inner-tabs">
+        <div class="inner-tab active" onclick="switchTab(this, 'exp-${idx}')">📋 Explanation</div>
+        <div class="inner-tab" onclick="switchTab(this, 'nli-${idx}')">📊 NLI Analysis</div>
+        <div class="inner-tab" onclick="switchTab(this, 'ev-${idx}')">📚 Evidence (${evidenceSources.length})</div>
+      </div>
+      <div class="inner-panel active" id="exp-${idx}">
+        <div class="explanation-text">${formatExplanation(explanation)}</div>
+      </div>
+      <div class="inner-panel" id="nli-${idx}">
+        <div style="margin-bottom:12px;font-size:12px;color:var(--muted);font-family:var(--mono)">
+          NLI = Natural Language Inference. BART-large-mnli scores each piece of evidence against the claim.
+        </div>
+        <div class="nli-bars">
+          <div class="nli-row">
+            <div class="nli-label">Contradicts</div>
+            <div class="nli-track"><div class="nli-fill contradiction" style="width:${contradiction}%"></div></div>
+            <div class="nli-pct">${contradiction}%</div>
+          </div>
+          <div class="nli-row">
+            <div class="nli-label">Supports</div>
+            <div class="nli-track"><div class="nli-fill entailment" style="width:${entailment}%"></div></div>
+            <div class="nli-pct">${entailment}%</div>
+          </div>
+          <div class="nli-row">
+            <div class="nli-label">Neutral</div>
+            <div class="nli-track"><div class="nli-fill neutral" style="width:${neutral_val}%"></div></div>
+            <div class="nli-pct">${neutral_val}%</div>
+          </div>
+        </div>
+        <div style="margin-top:16px;padding:12px;background:var(--surface2);border-radius:var(--radius);font-size:12px;color:var(--text2)">
+          <strong>Retrieval quality:</strong> ${((c.retrieval_quality||0)*100).toFixed(0)}% &nbsp;|&nbsp;
+          <strong>Evidence count:</strong> ${c.evidence_count || evidenceSources.length || 0} &nbsp;|&nbsp;
+          <strong>Claim type:</strong> ${esc(c.claim_type || '—')}
+        </div>
+      </div>
+      <div class="inner-panel" id="ev-${idx}">
+        <div class="evidence-list">${evHtml}</div>
+      </div>
+    </div>
+  </div>`;
+}
+
+// ── Helpers ────────────────────────────────────
+function toggleCard(idx) {
+  const card = document.getElementById(`card-${idx}`);
+  card.classList.toggle('open');
+}
+
+function switchTab(btn, panelId) {
+  const body = btn.closest('.claim-body');
+  body.querySelectorAll('.inner-tab').forEach(t => t.classList.remove('active'));
+  body.querySelectorAll('.inner-panel').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById(panelId).classList.add('active');
+}
+
+function verdictLabel(v) {
+  const map = {
+    'true': 'SUPPORTED', 'false': 'DISPUTED', 'partially_true': 'PARTIAL',
+    'not_applicable': 'N/A', 'unverified': 'UNVERIFIED', 'error': 'ERROR'
+  };
+  return map[v] || v.toUpperCase();
+}
+
+function esc(str) {
+  if (typeof str !== 'string') return '';
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function formatExplanation(text) {
+  if (!text || text === '—') return '<span style="color:var(--muted)">No explanation available for this claim.</span>';
+  // If HTML (from v2 builder), return as-is
+  if (text.includes('<br>') || text.includes('<strong>')) return text;
+  // Otherwise, escape and format plain text
+  return esc(text).replace(/\n/g, '<br>');
+}
+
+// Allow Enter key
+document.getElementById('videoUrl').addEventListener('keydown', e => {
+  if (e.key === 'Enter') handleAnalyze();
+});
+</script>
+</body>
+</html>
