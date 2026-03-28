@@ -1,0 +1,164 @@
+# RAG Configuration
+
+# Retrieval Settings
+retrieval:
+  max_results_per_source: 10
+  max_total_results: 30
+  similarity_threshold: 0.3
+  
+  # Source priorities
+  sources:
+    pubmed:
+      priority: 1.0
+      max_results: 15
+      rate_limit: 100  # requests per minute
+    semantic_scholar:
+      priority: 0.9
+      max_results: 10
+      rate_limit: 100
+    arxiv:
+      priority: 0.8
+      max_results: 5
+      rate_limit: 1000
+
+# Embedding Settings
+embeddings:
+  model_name: "allenai/scibert_scivocab_uncased"
+  max_sequence_length: 512
+  batch_size: 32
+  normalize_embeddings: true
+  
+  # Domain-specific models
+  domain_models:
+    medical: "dmis-lab/biobert-base-cased-v1.1"
+    biology: "dmis-lab/biobert-base-cased-v1.1"
+    computer_science: "allenai/scibert_scivocab_uncased"
+    physics: "allenai/scibert-scivocab-uncased"
+
+# Validation Settings
+validation:
+  weights:
+    evidence_support: 0.4
+    source_credibility: 0.3
+    recency: 0.2
+    consensus: 0.1
+  
+  # Recency requirements by domain (in years)
+  recency_requirements:
+    medical: 5
+    computer_science: 3
+    physics: 10
+    biology: 7
+    general: 5
+  
+  # Source credibility scores
+  source_credibility:
+    pubmed: 0.9
+    semantic_scholar: 0.8
+    arxiv: 0.7
+  
+  # High-impact journals (for credibility boost)
+  high_impact_journals:
+    - "Nature"
+    - "Science"
+    - "Cell"
+    - "New England Journal of Medicine"
+    - "Lancet"
+    - "Journal of the American Medical Association"
+
+# Caching Settings
+cache:
+  enable: true
+  ttl: 3600  # 1 hour in seconds
+  max_size: 10000  # Maximum number of cached items
+  
+  # Cache keys
+  cache_keys:
+    retrieval: "retrieval_"
+    embeddings: "embeddings_"
+    validation: "validation_"
+
+# Query Generation
+query_generation:
+  max_queries_per_entity: 4
+  max_entities_per_claim: 5
+  
+  # Query templates by domain
+  templates:
+    medical:
+      - "{entity} clinical trial"
+      - "{entity} treatment efficacy"
+      - "{entity} systematic review"
+      - "{entity} meta-analysis"
+    computer_science:
+      - "{entity} algorithm performance"
+      - "{entity} machine learning"
+      - "{entity} computational complexity"
+      - "{entity} benchmark"
+    physics:
+      - "{entity} quantum mechanics"
+      - "{entity} theoretical model"
+      - "{entity} experimental validation"
+    biology:
+      - "{entity} biological function"
+      - "{entity} genetic expression"
+      - "{entity} cellular mechanism"
+
+# Risk Assessment
+risk_assessment:
+  # Risk patterns
+  patterns:
+    outdated_method:
+      - "old.*method"
+      - "outdated.*technique"
+      - "obsolete.*approach"
+    unsupported_claim:
+      - "no.*evidence"
+      - "not.*proven"
+      - "lacks.*support"
+    dataset_misuse:
+      - "small.*sample"
+      - "biased.*data"
+      - "cherry.*picked"
+    statistical_myth:
+      - "correlation.*causation"
+      - "p.*hacking"
+      - "overfitting"
+    preprint_misuse:
+      - "preprint.*proven"
+      - "arxiv.*established"
+      - "not.*peer.*reviewed"
+  
+  # Risk thresholds
+  thresholds:
+    high_risk: 0.7
+    medium_risk: 0.4
+    low_risk: 0.0
+
+# Performance Settings
+performance:
+  # Parallel processing
+  max_concurrent_requests: 10
+  request_timeout: 30  # seconds
+  
+  # Batch processing
+  batch_size:
+    embedding: 32
+    validation: 5
+    retrieval: 3
+  
+  # Memory management
+  memory_limit: "8GB"
+  cleanup_interval: 3600  # seconds
+
+# Monitoring
+monitoring:
+  enable_metrics: true
+  metrics_port: 9090
+  
+  # Log levels
+  log_level: "INFO"
+  
+  # Performance tracking
+  track_latency: true
+  track_cache_hits: true
