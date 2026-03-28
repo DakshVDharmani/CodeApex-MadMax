@@ -1,81 +1,169 @@
-import { Panel } from '../components/ui/Panel';
-import { GlitchButton } from '../components/ui/GlitchButton';
-import { ToggleLeft, ToggleRight, Settings as SettingsIcon, Save, Trash2, AlertTriangle } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { deleteDoc } from 'firebase/firestore';
-import { deleteUser } from 'firebase/auth';
+import { 
+  Settings as SettingsIcon, 
+  Save, 
+  Trash2, 
+  AlertTriangle, 
+  ToggleLeft, 
+  ToggleRight 
+} from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import {
   EmailAuthProvider,
   reauthenticateWithCredential,
+  deleteUser,
 } from 'firebase/auth';
+import { doc, getDoc, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../firebase';
-import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 
-const SettingRow = ({ label, description, active, onToggle }: any) => (
+/* Unified Light Mode Design Tokens */
+const T = {
+  bg: "#ffffff",
+  bg2: "#f8f9fa",
+  surface: "#ffffff",
+  border: "rgba(0,0,0,0.08)",
+  borderHover: "rgba(0,0,0,0.16)",
+
+  text: "#0f172a",
+  text2: "#475569",
+  text3: "#64748b",
+
+  violet: "#7c3aed",
+  violetMid: "rgba(124,58,237,0.12)",
+  violetGlow: "rgba(124,58,237,0.25)",
+
+  cyan: "#06b6d4",
+  red: "#ef4444",
+  redSoft: "rgba(239,68,68,0.12)",
+
+  success: "#22c55e",
+
+  mono: '"JetBrains Mono", monospace',
+  serif: '"Playfair Display", Georgia, serif',
+  sans: '"Inter", system-ui, sans-serif',
+};
+
+const SettingRow = ({ 
+  label, 
+  description, 
+  active, 
+  onToggle 
+}: { 
+  label: string; 
+  description: string; 
+  active: boolean; 
+  onToggle: () => void; 
+}) => (
   <motion.div
     whileHover={{ x: 4 }}
-    className="flex items-center justify-between p-5 border-b border-white/5 last:border-0 group cursor-pointer"
     onClick={onToggle}
+    style={{
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      padding: '20px 32px',
+      borderBottom: `1px solid ${T.border}`,
+      cursor: 'pointer',
+      transition: 'all 0.2s ease',
+    }}
   >
-    <div className="flex-1">
-      <h4 className="font-semibold text-white mb-1" style={{ fontFamily: '"Playfair Display", Georgia, serif', fontSize: '1.1rem' }}>
+    <div style={{ flex: 1 }}>
+      <div style={{ 
+        fontFamily: T.serif, 
+        fontSize: 18, 
+        fontWeight: 600, 
+        color: T.text,
+        marginBottom: 4 
+      }}>
         {label}
-      </h4>
-      <p className="text-xs font-mono text-gray-500">{description}</p>
+      </div>
+      <div style={{ 
+        fontFamily: T.mono, 
+        fontSize: 13, 
+        color: T.text3,
+        lineHeight: 1.5 
+      }}>
+        {description}
+      </div>
     </div>
-    
-    <motion.button
+
+    <motion.div
       whileHover={{ scale: 1.1 }}
-      whileTap={{ scale: 0.9 }}
-      className={`transition-colors ml-6 ${active ? 'text-cyan-400' : 'text-gray-600'}`}
+      whileTap={{ scale: 0.95 }}
+      style={{
+        color: active ? T.cyan : T.text3,
+        transition: 'color 0.2s ease',
+      }}
     >
-      {active ? <ToggleRight className="w-10 h-10" /> : <ToggleLeft className="w-10 h-10" />}
-    </motion.button>
+      {active ? <ToggleRight size={38} /> : <ToggleLeft size={38} />}
+    </motion.div>
   </motion.div>
 );
 
 export const Settings = () => {
-  const user = auth.currentUser;
   const navigate = useNavigate();
-  const [showRift, setShowRift] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  const [passwordConfirm, setPasswordConfirm] = useState('');
-  const [authError, setAuthError] = useState<string | null>(null);
+  const user = auth.currentUser;
 
   const [settings, setSettings] = useState({
     sound: true,
-    notifications: true
+    notifications: true,
   });
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  // Load settings from Firestore
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [passwordConfirm, setPasswordConfirm] = useState('');
+  const [deleting, setDeleting] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
+
+  // Load settings
   useEffect(() => {
     if (!user) return;
 
     const loadSettings = async () => {
-      const ref = doc(db, 'settings', user.uid);
-      const snap = await getDoc(ref);
+      try {
+        const ref = doc(db, 'settings', user.uid);
+        const snap = await getDoc(ref);
 
-      if (snap.exists()) {
-        const data = snap.data();
-        setSettings({
-          sound: data.audio,
-          notifications: data.notifications
-        });
+        if (snap.exists()) {
+          const data = snap.data();
+          setSettings({
+            sound: data.audio ?? true,
+            notifications: data.notifications ?? true,
+          });
+        }
+      } catch (err) {
+        console.error("Failed to load settings:", err);
+      } finally {
+        setLoading(false);
       }
-
-      setLoading(false);
     };
 
     loadSettings();
   }, [user]);
 
-  const toggle = (key: keyof typeof settings) => {
+  const toggleSetting = (key: keyof typeof settings) => {
     setSettings(prev => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const saveSettings = async () => {
+    if (!user) return;
+
+    setSaving(true);
+    try {
+      const ref = doc(db, 'settings', user.uid);
+      await updateDoc(ref, {
+        audio: settings.sound,
+        notifications: settings.notifications,
+        updatedAt: serverTimestamp(),
+      });
+    } catch (err) {
+      console.error("Failed to save settings:", err);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const confirmDeleteAccount = async () => {
@@ -85,17 +173,14 @@ export const Settings = () => {
       setDeleting(true);
       setAuthError(null);
 
-      const credential = EmailAuthProvider.credential(
-        user.email,
-        passwordConfirm
-      );
-
+      const credential = EmailAuthProvider.credential(user.email, passwordConfirm);
       await reauthenticateWithCredential(user, credential);
+
       await deleteDoc(doc(db, 'settings', user.uid));
       await deleteDoc(doc(db, 'users', user.uid));
       await deleteUser(user);
 
-      setShowRift(false);
+      setShowDeleteModal(false);
       navigate('/signup');
     } catch (err: any) {
       console.error('Account deletion failed:', err);
@@ -103,314 +188,337 @@ export const Settings = () => {
       if (err.code === 'auth/wrong-password') {
         setAuthError('Incorrect password.');
       } else if (err.code === 'auth/requires-recent-login') {
-        setAuthError('Please re-authenticate.');
+        setAuthError('Please re-authenticate and try again.');
       } else {
-        setAuthError('Deletion failed.');
+        setAuthError('Failed to delete account. Please try again.');
       }
-
+    } finally {
       setDeleting(false);
     }
   };
 
-  const saveSettings = async () => {
-    if (!user) return;
-
-    setSaving(true);
-    const ref = doc(db, 'settings', user.uid);
-
-    await updateDoc(ref, {
-      audio: settings.sound,
-      notifications: settings.notifications,
-      updatedAt: serverTimestamp()
-    });
-
-    setTimeout(() => setSaving(false), 1000);
-  };
-
-  if (loading) return null;
+  if (loading) {
+    return <div style={{ padding: 60, textAlign: 'center', color: T.text3 }}>Loading settings...</div>;
+  }
 
   return (
-    <div className="h-full flex flex-col gap-8">
-      {/* HEADER */}
-      <motion.header
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6 }}
-        className="flex items-center gap-6"
-      >
-        <motion.div
-          animate={{ rotate: [0, 5, -5, 0] }}
-          transition={{ duration: 3, repeat: Infinity }}
-          className="w-16 h-16 rounded-2xl bg-cyan-950/30 border border-cyan-500/30 flex items-center justify-center"
+    <div style={{
+      minHeight: '100vh',
+      background: T.bg,
+      color: T.text,
+      fontFamily: T.sans,
+      padding: '24px 32px 60px',
+    }}>
+      <div style={{ maxWidth: 920, margin: '0 auto' }}>
+        {/* Header */}
+        <motion.header
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          style={{ marginBottom: 32, textAlign: 'center' }}
         >
-          <SettingsIcon className="w-8 h-8 text-cyan-400" />
-        </motion.div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16, marginBottom: 16 }}>
+            <motion.div
+              animate={{ rotate: [0, 8, -8, 0] }}
+              transition={{ duration: 4, repeat: Infinity }}
+              style={{
+                width: 40,
+                height: 40,
+                background: T.violetMid,
+                border: `1px solid rgba(124,58,237,0.3)`,
+                borderRadius: 16,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <SettingsIcon size={20} color={T.violet} />
+            </motion.div>
 
-        <div>
-          <h2
-            className="text-5xl font-bold mb-2"
-            style={{
-              fontFamily: '"Playfair Display", Georgia, serif',
-              background: 'linear-gradient(135deg, #ffffff 0%, #00ffff 100%)',
+            <h1 style={{
+              fontFamily: T.serif,
+              fontSize: 28,
+              fontWeight: 800,
+              letterSpacing: '-0.03em',
+              background: `linear-gradient(90deg, ${T.violet}, ${T.cyan})`,
               WebkitBackgroundClip: 'text',
               WebkitTextFillColor: 'transparent',
-            }}
-          >
-            System Configuration
-          </h2>
-          <p className="text-gray-500 font-mono text-sm tracking-[0.15em] uppercase">
-            Customize Your Interface Parameters
-          </p>
-        </div>
-      </motion.header>
+            }}>
+              System Configuration
+            </h1>
+          </div>
 
-      {/* INTERFACE SETTINGS */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.2 }}
-      >
-        <Panel title="Interface Parameters" glow="cyan">
+          <p style={{
+            fontFamily: T.mono,
+            fontSize: 13,
+            letterSpacing: '0.15em',
+            textTransform: 'uppercase',
+            color: T.text3,
+          }}>
+            Customize your MADMAX experience
+          </p>
+        </motion.header>
+
+        {/* Interface Settings */}
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          style={{
+            background: T.bg2,
+            border: `1px solid ${T.border}`,
+            borderRadius: 24,
+            overflow: 'hidden',
+            marginBottom: 24,
+          }}
+        >
+          <div style={{ padding: '20px 32px', borderBottom: `1px solid ${T.border}` }}>
+            <div style={{ fontFamily: T.mono, fontSize: 11, letterSpacing: '0.2em', color: T.text3 }}>INTERFACE</div>
+            <div style={{ fontFamily: T.serif, fontSize: 24, fontWeight: 700, color: T.text }}>Preferences</div>
+          </div>
+
           <SettingRow
             label="Audio Feedback"
-            description="Enable UI interaction sounds and system alerts"
+            description="Enable sound effects for UI interactions and system alerts"
             active={settings.sound}
-            onToggle={() => toggle('sound')}
+            onToggle={() => toggleSetting('sound')}
           />
+
           <SettingRow
             label="Notifications"
-            description="Allow system alerts, updates, and real-time threat notifications"
+            description="Receive real-time alerts for system updates and threat detections"
             active={settings.notifications}
-            onToggle={() => toggle('notifications')}
+            onToggle={() => toggleSetting('notifications')}
           />
-        </Panel>
-      </motion.div>
+        </motion.div>
 
-      {/* SAVE BUTTON */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.3 }}
-        className="flex justify-end"
-      >
-        <motion.button
-          onClick={saveSettings}
-          disabled={saving}
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          className="group relative px-8 py-4 bg-gradient-to-r from-cyan-600 to-cyan-700 hover:from-cyan-500 hover:to-cyan-600 text-white font-mono text-sm tracking-[0.15em] uppercase font-semibold rounded-xl overflow-hidden disabled:opacity-50"
+        {/* Save Button */}
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 48 }}
         >
-          <motion.div
-            className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0"
-            animate={{ x: ['-100%', '200%'] }}
-            transition={{ duration: 2, repeat: Infinity }}
-          />
-          <span className="relative z-10 flex items-center gap-2">
+          <motion.button
+            onClick={saveSettings}
+            disabled={saving}
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            style={{
+              padding: '12px 28px',
+              background: `linear-gradient(135deg, ${T.violet}, #6d28d9)`,
+              color: '#fff',
+              border: 'none',
+              borderRadius: 14,
+              fontFamily: T.mono,
+              fontSize: 13,
+              fontWeight: 600,
+              letterSpacing: '0.06em',
+              textTransform: 'uppercase',
+              cursor: saving ? 'not-allowed' : 'pointer',
+              opacity: saving ? 0.8 : 1,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+            }}
+          >
             {saving ? (
               <>
-                <motion.div
-                  animate={{ rotate: 360 }}
-                  transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                >
-                  <Save className="w-4 h-4" />
+                <motion.div animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity }}>
+                  <Save size={18} />
                 </motion.div>
-                Saving...
+                SAVING...
               </>
             ) : (
               <>
-                <Save className="w-4 h-4" />
-                Save Settings
+                <Save size={18} />
+                SAVE SETTINGS
               </>
             )}
-          </span>
-        </motion.button>
-      </motion.div>
+          </motion.button>
+        </motion.div>
 
-      {/* DANGER ZONE */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.4 }}
-      >
-        <Panel title="Danger Zone" glow="red" className="border-red-500/30">
-          <div className="flex items-center justify-between p-6">
-            <div className="flex-1">
-              <h4
-                className="font-bold text-red-500 text-xl mb-2"
-                style={{ fontFamily: '"Playfair Display", Georgia, serif' }}
-              >
-                Delete Account Permanently
-              </h4>
-              <p className="text-sm font-mono text-gray-500">
-                This will permanently delete your account and all associated data.
-                <br />
-                <span className="text-red-400/80">This action cannot be undone.</span>
-              </p>
+        {/* Danger Zone */}
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+        >
+          <div style={{
+            background: T.bg2,
+            border: `1px solid ${T.red}30`,
+            borderRadius: 24,
+            padding: 24,
+          }}>
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontFamily: T.mono, fontSize: 11, letterSpacing: '0.2em', color: T.red }}>DANGER ZONE</div>
+              <div style={{ fontFamily: T.serif, fontSize: 20, fontWeight: 700, color: T.text }}>Account Deletion</div>
             </div>
 
+            <p style={{ color: T.text2, lineHeight: 1.7, marginBottom: 24 }}>
+              Permanently delete your account and all associated data. 
+              This action cannot be undone.
+            </p>
+
             <motion.button
-              onClick={() => setShowRift(true)}
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              className="group relative ml-6 px-6 py-3 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white font-mono text-xs tracking-[0.15em] uppercase font-semibold rounded-xl overflow-hidden"
+              onClick={() => setShowDeleteModal(true)}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              style={{
+                padding: '12px 28px',
+                background: T.red,
+                color: '#fff',
+                border: 'none',
+                borderRadius: 14,
+                fontFamily: T.mono,
+                fontSize: 13,
+                fontWeight: 600,
+                letterSpacing: '0.06em',
+                textTransform: 'uppercase',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+              }}
             >
-              <motion.div
-                className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0"
-                animate={{ x: ['-100%', '200%'] }}
-                transition={{ duration: 2, repeat: Infinity }}
-              />
-              <span className="relative z-10 flex items-center gap-2">
-                <Trash2 className="w-4 h-4" />
-                Delete Account
-              </span>
+              <Trash2 size={18} />
+              DELETE ACCOUNT
             </motion.button>
           </div>
-        </Panel>
-      </motion.div>
+        </motion.div>
+      </div>
 
-      {/* DELETION CONFIRMATION MODAL */}
+      {/* Delete Confirmation Modal */}
       <AnimatePresence>
-        {showRift && (
-          <>
-            {/* Split screen effect */}
+        {showDeleteModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setShowDeleteModal(false)}
+            style={{
+              position: 'fixed',
+              inset: 0,
+              background: 'rgba(15,23,42,0.85)',
+              backdropFilter: 'blur(20px)',
+              zIndex: 200,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: 24,
+            }}
+          >
             <motion.div
-              className="fixed inset-y-0 left-0 w-1/2 z-40 bg-gradient-to-r from-black to-transparent"
-              initial={{ x: 0 }}
-              animate={{ x: '-100%' }}
-              exit={{ x: 0 }}
-              transition={{ duration: 0.6, ease: 'easeInOut' }}
-            />
-            <motion.div
-              className="fixed inset-y-0 right-0 w-1/2 z-40 bg-gradient-to-l from-black to-transparent"
-              initial={{ x: 0 }}
-              animate={{ x: '100%' }}
-              exit={{ x: 0 }}
-              transition={{ duration: 0.6, ease: 'easeInOut' }}
-            />
-
-            {/* Backdrop */}
-            <motion.div
-              className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setShowRift(false)}
+              initial={{ scale: 0.92, y: 30 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.92, y: 30 }}
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                background: '#fff',
+                maxWidth: 460,
+                width: '100%',
+                borderRadius: 20,
+                overflow: 'hidden',
+                boxShadow: '0 30px 80px rgba(0,0,0,0.2)',
+              }}
             >
-              {/* Modal */}
-              <motion.div
-                initial={{ scale: 0.8, y: 50 }}
-                animate={{ scale: 1, y: 0 }}
-                exit={{ scale: 0.8, y: 50 }}
-                onClick={(e) => e.stopPropagation()}
-                className="relative w-full max-w-lg mx-4 bg-gradient-to-br from-black via-red-950/20 to-black border border-red-500/30 rounded-2xl overflow-hidden"
-                style={{
-                  boxShadow: '0 0 80px rgba(255,0,0,0.4), inset 0 0 60px rgba(255,0,0,0.05)',
-                }}
-              >
-                {/* Animated background */}
+              <div style={{ padding: '40px 40px 28px', textAlign: 'center' }}>
                 <motion.div
-                  className="absolute inset-0 opacity-30"
-                  animate={{
-                    background: [
-                      'radial-gradient(circle at 50% 50%, rgba(255,0,0,0.3), transparent 70%)',
-                      'radial-gradient(circle at 30% 70%, rgba(255,0,0,0.3), transparent 70%)',
-                      'radial-gradient(circle at 70% 30%, rgba(255,0,0,0.3), transparent 70%)',
-                      'radial-gradient(circle at 50% 50%, rgba(255,0,0,0.3), transparent 70%)',
-                    ],
+                  animate={{ scale: [1, 1.12, 1] }}
+                  transition={{ duration: 2, repeat: Infinity }}
+                  style={{ 
+                    margin: '0 auto 24px', 
+                    width: 64, 
+                    height: 64, 
+                    background: T.redSoft, 
+                    borderRadius: '50%', 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'center' 
                   }}
-                  transition={{ duration: 6, repeat: Infinity }}
-                />
+                >
+                  <AlertTriangle size={32} color={T.red} />
+                </motion.div>
 
-                {/* Header */}
-                <div className="relative z-10 px-8 py-6 border-b border-red-500/30 text-center">
-                  <motion.div
-                    animate={{ scale: [1, 1.1, 1] }}
-                    transition={{ duration: 2, repeat: Infinity }}
-                    className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-red-950/50 border-2 border-red-500 mb-4"
-                  >
-                    <AlertTriangle className="w-8 h-8 text-red-500" />
-                  </motion.div>
+                <h3 style={{ 
+                  fontFamily: T.serif, 
+                  fontSize: 26, 
+                  fontWeight: 700, 
+                  color: T.text, 
+                  marginBottom: 12 
+                }}>
+                  Delete Account Permanently?
+                </h3>
+                <p style={{ color: T.text2, lineHeight: 1.7 }}>
+                  This will permanently delete your account and all associated data. 
+                  This action cannot be undone.
+                </p>
+              </div>
 
-                  <h3
-                    className="text-3xl font-bold text-red-500 mb-2"
-                    style={{ fontFamily: '"Playfair Display", Georgia, serif' }}
-                  >
-                    Account Deletion Confirmation
-                  </h3>
-                  <p className="text-sm font-mono text-gray-400">
-                    Authorization Required
-                  </p>
+              <div style={{ padding: '0 40px 40px' }}>
+                <div style={{ marginBottom: 16 }}>
+                  <div style={{ fontFamily: T.mono, fontSize: 12, color: T.text3, marginBottom: 8 }}>Confirm Password</div>
+                  <input
+                    type="password"
+                    value={passwordConfirm}
+                    onChange={(e) => setPasswordConfirm(e.target.value)}
+                    placeholder="Enter your password"
+                    style={{
+                      width: '100%',
+                      padding: '14px 20px',
+                      background: T.bg2,
+                      border: `1px solid ${T.border}`,
+                      borderRadius: 12,
+                      fontSize: 15,
+                      color: T.text,
+                    }}
+                  />
                 </div>
 
-                {/* Content */}
-                <div className="relative z-10 px-8 py-8 space-y-6">
-                  <p className="text-sm font-mono text-gray-300 text-center leading-relaxed">
-                    This action will permanently delete your account and all associated data.
-                    <br />
-                    <span className="text-red-400">All data will be irreversibly destroyed.</span>
-                  </p>
+                {authError && (
+                  <div style={{ color: T.red, fontSize: 13, marginBottom: 16 }}>{authError}</div>
+                )}
 
-                  {/* Password input */}
-                  <div className="space-y-2">
-                    <label className="block text-xs font-mono text-gray-500 tracking-wide uppercase">
-                      Confirm Password
-                    </label>
-                    <input
-                      type="password"
-                      placeholder="Enter your password"
-                      value={passwordConfirm}
-                      onChange={(e) => setPasswordConfirm(e.target.value)}
-                      className="w-full bg-black/60 border border-red-500/30 focus:border-red-500 text-white px-4 py-3 font-mono text-sm outline-none rounded-xl transition-all"
-                    />
-                  </div>
+                <div style={{ display: 'flex', gap: 12 }}>
+                  <motion.button
+                    onClick={() => setShowDeleteModal(false)}
+                    disabled={deleting}
+                    whileHover={{ scale: 1.02 }}
+                    style={{
+                      flex: 1,
+                      padding: '14px',
+                      background: T.bg2,
+                      border: `1px solid ${T.border}`,
+                      borderRadius: 12,
+                      color: T.text2,
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Cancel
+                  </motion.button>
 
-                  {/* Error message */}
-                  {authError && (
-                    <motion.div
-                      initial={{ opacity: 0, y: -10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="flex items-center gap-2 p-3 bg-red-950/30 border border-red-500/30 rounded-lg"
-                    >
-                      <AlertTriangle className="w-4 h-4 text-red-400 flex-shrink-0" />
-                      <p className="text-xs text-red-400 font-mono">
-                        {authError}
-                      </p>
-                    </motion.div>
-                  )}
-
-                  {/* Actions */}
-                  <div className="flex gap-3 pt-4">
-                    <motion.button
-                      onClick={() => setShowRift(false)}
-                      disabled={deleting}
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                      className="flex-1 px-4 py-3 bg-black/60 border border-white/10 hover:border-white/30 text-white rounded-xl font-mono text-sm tracking-wide transition-all"
-                    >
-                      Abort
-                    </motion.button>
-
-                    <motion.button
-                      onClick={confirmDeleteAccount}
-                      disabled={deleting || !passwordConfirm}
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                      className="flex-1 px-4 py-3 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white rounded-xl font-mono text-sm tracking-wide transition-all disabled:opacity-50 disabled:cursor-not-allowed relative overflow-hidden group"
-                    >
-                      <motion.div
-                        className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0"
-                        animate={{ x: ['-100%', '200%'] }}
-                        transition={{ duration: 2, repeat: Infinity }}
-                      />
-                      <span className="relative z-10">
-                        {deleting ? 'Erasing...' : 'Confirm Delete'}
-                      </span>
-                    </motion.button>
-                  </div>
+                  <motion.button
+                    onClick={confirmDeleteAccount}
+                    disabled={deleting || !passwordConfirm}
+                    whileHover={{ scale: 1.02 }}
+                    style={{
+                      flex: 1,
+                      padding: '14px',
+                      background: T.red,
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: 12,
+                      fontWeight: 600,
+                      cursor: deleting || !passwordConfirm ? 'not-allowed' : 'pointer',
+                      opacity: deleting || !passwordConfirm ? 0.7 : 1,
+                    }}
+                  >
+                    {deleting ? 'Deleting...' : 'Confirm Deletion'}
+                  </motion.button>
                 </div>
-              </motion.div>
+              </div>
             </motion.div>
-          </>
+          </motion.div>
         )}
       </AnimatePresence>
     </div>

@@ -1,8 +1,47 @@
-import React, { useState } from 'react';
-import { Panel } from '../components/ui/Panel';
-import { GlitchButton } from '../components/ui/GlitchButton';
+import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Loader2, AlertTriangle, ExternalLink, BarChart3, TrendingUp, Shield, Eye, Instagram, Facebook, Youtube } from 'lucide-react';
+import { 
+  Loader2, 
+  AlertTriangle, 
+  ExternalLink, 
+  BarChart3, 
+  TrendingUp, 
+  Shield, 
+  Eye, 
+  Instagram, 
+  Facebook, 
+  Youtube 
+} from 'lucide-react';
+
+/* Unified Light Mode Design Tokens */
+const T = {
+  bg: "#ffffff",
+  bg2: "#f8f9fa",
+  surface: "#ffffff",
+  border: "rgba(0,0,0,0.08)",
+  borderHover: "rgba(0,0,0,0.16)",
+
+  text: "#0f172a",
+  text2: "#475569",
+  text3: "#64748b",
+
+  violet: "#7c3aed",
+  violetMid: "rgba(124,58,237,0.12)",
+  violetGlow: "rgba(124,58,237,0.25)",
+
+  cyan: "#06b6d4",
+  cyanSoft: "rgba(6,182,212,0.10)",
+
+  red: "#ef4444",
+  redSoft: "rgba(239,68,68,0.12)",
+
+  success: "#22c55e",
+  warning: "#eab308",
+
+  mono: '"JetBrains Mono", monospace',
+  serif: '"Playfair Display", Georgia, serif',
+  sans: '"Inter", system-ui, sans-serif',
+};
 
 interface Claim {
   id: string;
@@ -46,42 +85,6 @@ interface VideoMetadata {
   platform: string;
 }
 
-/* ================= METRIC BAR ================= */
-const MetricBar = ({ label, value, color, highlight }: { label: string; value: number; color: string; highlight?: boolean }) => (
-  <div className={`space-y-1.5 transition-all duration-700 ${highlight ? 'opacity-100' : 'opacity-60'}`}>
-    <div className="flex justify-between items-center">
-      <span className={`text-[10px] font-mono uppercase tracking-widest ${highlight ? 'text-white' : 'text-gray-400'}`}>{label}</span>
-      <span className="text-[10px] font-mono text-white">{(value * 100).toFixed(1)}%</span>
-    </div>
-    <div className="h-1.5 bg-white/5 rounded-full overflow-hidden border border-white/5">
-      <motion.div
-        animate={{ width: `${Math.min(value * 100, 100)}%` }}
-        transition={{ type: 'spring', stiffness: 120, damping: 20 }}
-        className={`h-full ${color} ${highlight ? 'shadow-[0_0_12px_rgba(255,255,255,0.4)]' : ''}`}
-      />
-    </div>
-  </div>
-);
-
-/* ================= STAT CARD ================= */
-const StatCard = ({ label, value, color, icon }: { label: string; value: number; color: string; icon: React.ReactNode }) => (
-  <motion.div
-    initial={{ opacity: 0, y: 20 }}
-    animate={{ opacity: 1, y: 0 }}
-    className="relative bg-obsidian/60 backdrop-blur-sm border border-white/10 p-4 hover:border-white/20 transition-all duration-300"
-  >
-    <div className="flex items-center justify-between">
-      <div>
-        <div className="text-2xl font-bold text-white">{value}</div>
-        <div className="text-xs text-gray-400 uppercase tracking-wider">{label}</div>
-      </div>
-      <div className={`p-2 rounded-lg ${color}`}>
-        {icon}
-      </div>
-    </div>
-  </motion.div>
-);
-
 export default function FakeMedia() {
   const [transcript, setTranscript] = useState('');
   const [claims, setClaims] = useState<Claim[]>([]);
@@ -90,13 +93,14 @@ export default function FakeMedia() {
   const [filter, setFilter] = useState('all');
   const [mediaUrl, setMediaUrl] = useState('');
   const [detectedPlatform, setDetectedPlatform] = useState<string>('');
-  const [stats, setStats] = useState({
-    total_claims: 0,
-    high_risk: 0,
-    medium_risk: 0,
-    low_risk: 0,
-    misinformation: 0
-  });
+
+  const stats = {
+    total_claims: claims.length,
+    high_risk: claims.filter(c => c.risk_score >= 70).length,
+    medium_risk: claims.filter(c => c.risk_score >= 40 && c.risk_score < 70).length,
+    low_risk: claims.filter(c => c.risk_score < 40).length,
+    misinformation: claims.filter(c => c.is_misinformation).length
+  };
 
   const detectPlatformFromUrl = (url: string): string => {
     const urlLower = url.toLowerCase();
@@ -119,10 +123,13 @@ export default function FakeMedia() {
 
     setLoading(true);
     try {
-      const response = await fetch('http://localhost:8000/api/analyze', {
+      const response = await fetch('http://127.0.0.1:8000/api/youtube/ingest', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: mediaUrl.trim() })
+        body: JSON.stringify({ 
+          type: 'url',
+          url: mediaUrl.trim() 
+        })
       });
       const data = await response.json();
       
@@ -134,7 +141,6 @@ export default function FakeMedia() {
           platform: data.platform,
           url: data.url
         });
-        calculateStats(data.claims || []);
       } else {
         console.error('Analysis failed:', data);
       }
@@ -143,17 +149,6 @@ export default function FakeMedia() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const calculateStats = (claimsData: Claim[]) => {
-    const stats = {
-      total_claims: claimsData.length,
-      high_risk: claimsData.filter(c => c.risk_score >= 70).length,
-      medium_risk: claimsData.filter(c => c.risk_score >= 40 && c.risk_score < 70).length,
-      low_risk: claimsData.filter(c => c.risk_score < 40).length,
-      misinformation: claimsData.filter(c => c.is_misinformation).length
-    };
-    setStats(stats);
   };
 
   const filteredClaims = claims.filter(claim => {
@@ -167,350 +162,360 @@ export default function FakeMedia() {
 
   const getPlatformIcon = (platform: string) => {
     switch (platform) {
-      case 'instagram': return <Instagram className="w-5 h-5" />;
-      case 'facebook': return <Facebook className="w-5 h-5" />;
-      case 'youtube': return <Youtube className="w-5 h-5" />;
-      default: return <ExternalLink className="w-5 h-5" />;
-    }
-  };
-
-  const getPlatformColor = (platform: string) => {
-    switch (platform) {
-      case 'instagram': return 'text-pink-400';
-      case 'facebook': return 'text-blue-400';
-      case 'youtube': return 'text-red-400';
-      default: return 'text-gray-400';
+      case 'instagram': return <Instagram className="w-5 h-5 text-pink-500" />;
+      case 'facebook': return <Facebook className="w-5 h-5 text-blue-500" />;
+      case 'youtube': return <Youtube className="w-5 h-5 text-red-500" />;
+      default: return <ExternalLink className="w-5 h-5 text-gray-400" />;
     }
   };
 
   const getRiskColor = (score: number) => {
-    if (score >= 70) return 'bg-red-500 shadow-[0_0_12px_rgba(255,0,51,0.5)]';
-    if (score >= 40) return 'bg-yellow-500 shadow-[0_0_12px_rgba(255,191,0,0.5)]';
-    return 'bg-green-500 shadow-[0_0_12px_rgba(0,255,0,0.5)]';
+    if (score >= 70) return T.red;
+    if (score >= 40) return T.warning;
+    return T.success;
   };
 
   const getRiskLevel = (score: number) => {
-    if (score >= 70) return { level: 'High', color: 'text-red-400' };
-    if (score >= 40) return { level: 'Medium', color: 'text-yellow-400' };
-    return { level: 'Low', color: 'text-green-400' };
+    if (score >= 70) return { level: 'High Risk', color: T.red };
+    if (score >= 40) return { level: 'Medium Risk', color: T.warning };
+    return { level: 'Low Risk', color: T.success };
   };
 
   return (
-    <div className="min-h-screen bg-black text-white p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <motion.div
-            initial={{ rotate: 0 }}
-            animate={{ rotate: 360 }}
-            transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
-          >
-            <ExternalLink className="w-6 h-6 text-red-500" />
-          </motion.div>
-          <h1 className="text-3xl font-display font-bold uppercase tracking-wider">Fake Media Detection</h1>
-        </div>
-        <div className="flex items-center gap-2 px-3 py-1 border border-red-500/30 rounded-full">
-          <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
-          <span className="text-xs text-red-400 font-mono">Multi-Platform</span>
-        </div>
-      </div>
+    <div style={{
+      minHeight: '100vh',
+      background: T.bg,
+      color: T.text,
+      fontFamily: T.sans,
+      padding: '24px 32px 60px',
+    }}>
+      <div style={{ maxWidth: 1280, margin: '0 auto' }}>
+        {/* Professional Header */}
+        <motion.header
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          style={{ textAlign: 'center', marginBottom: 32 }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, marginBottom: 12 }}>
+            <motion.div
+              animate={{ rotate: [0, 8, -8, 0] }}
+              transition={{ duration: 4, repeat: Infinity }}
+              style={{
+                width: 40,
+                height: 40,
+                background: T.violetMid,
+                border: `1px solid rgba(124,58,237,0.3)`,
+                borderRadius: 16,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Shield size={20} color={T.violet} />
+            </motion.div>
 
-      {/* Media Input Form */}
-      <Panel title="Analyze Social Media Content" glow="red">
-        <form onSubmit={handleMediaSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <label className="text-xs font-mono uppercase tracking-wider text-gray-400">Social Media URL</label>
-            <div className="relative">
+            <h1 style={{
+              fontFamily: T.serif,
+              fontSize: 28,
+              fontWeight: 800,
+              letterSpacing: '-0.04em',
+              background: `linear-gradient(90deg, ${T.violet}, ${T.cyan})`,
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+            }}>
+              Fake Media Detection
+            </h1>
+          </div>
+
+          <p style={{
+            fontFamily: T.mono,
+            fontSize: 13,
+            letterSpacing: '0.15em',
+            textTransform: 'uppercase',
+            color: T.text3,
+          }}>
+            Multi-Platform Deepfake & Misinformation Analysis
+          </p>
+        </motion.header>
+
+        {/* Media Input */}
+        <div style={{
+          background: T.bg2,
+          border: `1px solid ${T.border}`,
+          borderRadius: 24,
+          padding: 24,
+          marginBottom: 24,
+        }}>
+          <form onSubmit={handleMediaSubmit}>
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontFamily: T.mono, fontSize: 11, letterSpacing: '0.2em', color: T.text3, marginBottom: 8 }}>SOCIAL MEDIA URL</div>
               <input
                 type="url"
                 value={mediaUrl}
                 onChange={handleUrlChange}
-                placeholder="https://www.instagram.com/p/... or https://www.facebook.com/posts/... or https://www.youtube.com/watch?v=..."
+                placeholder="https://www.instagram.com/p/... or https://www.youtube.com/watch?v=..."
                 disabled={loading}
-                className="w-full px-4 py-3 bg-obsidian/50 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:border-red-500/50 focus:outline-none transition-all duration-300 pr-12"
+                style={{
+                  width: '100%',
+                  padding: '14px 20px',
+                  background: '#ffffff',
+                  border: `1px solid ${T.border}`,
+                  borderRadius: 16,
+                  fontSize: 14,
+                  color: T.text,
+                  outline: 'none',
+                }}
               />
               {detectedPlatform && detectedPlatform !== 'unknown' && (
-                <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 8, color: T.cyan }}>
                   {getPlatformIcon(detectedPlatform)}
+                  <span style={{ fontFamily: T.mono, fontSize: 13 }}>Platform Detected: {detectedPlatform}</span>
                 </div>
               )}
             </div>
-            {detectedPlatform && detectedPlatform !== 'unknown' && (
-              <div className={`text-xs font-mono ${getPlatformColor(detectedPlatform)} uppercase tracking-wider`}>
-                Platform Detected: {detectedPlatform}
-              </div>
-            )}
-          </div>
-          <GlitchButton 
-            type="submit" 
-            disabled={!mediaUrl.trim() || loading} 
-            className="w-full"
-            variant="primary"
-          >
-            {loading ? (
-              <>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Processing Content...
-              </>
-            ) : (
-              'Analyze for Misinformation'
-            )}
-          </GlitchButton>
-        </form>
-      </Panel>
 
-      {/* Media Information */}
-      <AnimatePresence>
-        {mediaMetadata && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-          >
-            <Panel title={`${mediaMetadata.platform.charAt(0).toUpperCase() + mediaMetadata.platform.slice(1)} Information`} glow="cyan">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div>
-                  <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">Title</p>
-                  <p className="font-medium text-sm truncate">{mediaMetadata.title}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">Platform</p>
-                  <p className="font-medium text-sm capitalize">{mediaMetadata.platform}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">Words</p>
-                  <p className="font-medium text-sm">{mediaMetadata.word_count}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">Method</p>
-                  <p className="font-medium text-sm">{mediaMetadata.transcript_method || 'Multi-Source'}</p>
-                </div>
-              </div>
-            </Panel>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Stats Cards */}
-      <AnimatePresence>
-        {claims.length > 0 && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className="grid grid-cols-1 md:grid-cols-5 gap-4"
-          >
-            <StatCard 
-              label="Total Claims" 
-              value={stats.total_claims} 
-              color="bg-blue-500/20"
-              icon={<BarChart3 className="w-4 h-4 text-blue-400" />}
-            />
-            <StatCard 
-              label="High Risk" 
-              value={stats.high_risk} 
-              color="bg-red-500/20"
-              icon={<AlertTriangle className="w-4 h-4 text-red-400" />}
-            />
-            <StatCard 
-              label="Medium Risk" 
-              value={stats.medium_risk} 
-              color="bg-yellow-500/20"
-              icon={<TrendingUp className="w-4 h-4 text-yellow-400" />}
-            />
-            <StatCard 
-              label="Low Risk" 
-              value={stats.low_risk} 
-              color="bg-green-500/20"
-              icon={<Shield className="w-4 h-4 text-green-400" />}
-            />
-            <StatCard 
-              label="Misinformation" 
-              value={stats.misinformation} 
-              color="bg-purple-500/20"
-              icon={<Eye className="w-4 h-4 text-purple-400" />}
-            />
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Filter */}
-      <AnimatePresence>
-        {claims.length > 0 && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className="flex items-center gap-4"
-          >
-            <label className="text-xs font-mono uppercase tracking-wider text-gray-400">Filter Claims</label>
-            <select 
-              value={filter} 
-              onChange={(e) => setFilter(e.target.value)}
-              className="px-3 py-2 bg-obsidian/50 border border-white/10 rounded-lg text-white text-sm focus:border-red-500/50 focus:outline-none transition-all duration-300"
+            <motion.button
+              type="submit"
+              disabled={!mediaUrl.trim() || loading}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              style={{
+                width: '100%',
+                padding: '14px',
+                background: `linear-gradient(135deg, ${T.violet}, #6d28d9)`,
+                color: '#fff',
+                border: 'none',
+                borderRadius: 16,
+                fontFamily: T.mono,
+                fontSize: 13,
+                fontWeight: 600,
+                letterSpacing: '0.06em',
+                textTransform: 'uppercase',
+                cursor: loading || !mediaUrl.trim() ? 'not-allowed' : 'pointer',
+                opacity: loading || !mediaUrl.trim() ? 0.75 : 1,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 12,
+              }}
             >
-              <option value="all">All Claims</option>
-              <option value="high">High Risk</option>
-              <option value="medium">Medium Risk</option>
-              <option value="low">Low Risk</option>
-              <option value="misinformation">Misinformation Only</option>
-            </select>
-          </motion.div>
-        )}
-      </AnimatePresence>
+              {loading ? (
+                <>
+                  <Loader2 className="animate-spin" size={20} />
+                  ANALYZING MEDIA...
+                </>
+              ) : (
+                'Analyze for Misinformation & Deepfakes'
+              )}
+            </motion.button>
+          </form>
+        </div>
 
-      {/* Claims List */}
-      <AnimatePresence>
-        {filteredClaims.map((claim, index) => {
-          const risk = getRiskLevel(claim.risk_score);
-          return (
+        {/* Media Metadata */}
+        <AnimatePresence>
+          {mediaMetadata && (
             <motion.div
-              key={claim.id}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
-              transition={{ delay: index * 0.1 }}
+              style={{
+                background: T.bg2,
+                border: `1px solid ${T.border}`,
+                borderRadius: 24,
+                padding: 16,
+                marginBottom: 16,
+              }}
             >
-              <Panel title={`Claim Analysis - Risk: ${risk.level}`} glow={claim.risk_score >= 70 ? 'red' : claim.risk_score >= 40 ? 'purple' : 'cyan'}>
-                {claim.is_misinformation && (
-                  <div className="mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg flex items-center gap-2">
-                    <AlertTriangle className="w-4 h-4 text-red-400" />
-                    <span className="text-red-400 text-sm font-medium">⚠️ Misinformation Detected</span>
+              <div style={{ fontFamily: T.mono, fontSize: 11, letterSpacing: '0.2em', color: T.text3, marginBottom: 8 }}>
+                MEDIA INFORMATION — {mediaMetadata.platform?.toUpperCase() || 'UNKNOWN'}
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16 }}>
+                <div>
+                  <div style={{ color: T.text3, fontSize: 12, marginBottom: 4 }}>Title</div>
+                  <div style={{ color: T.text, fontWeight: 500 }}>{mediaMetadata.title}</div>
+                </div>
+                <div>
+                  <div style={{ color: T.text3, fontSize: 12, marginBottom: 4 }}>Platform</div>
+                  <div style={{ color: T.text, fontWeight: 500, textTransform: 'capitalize' }}>{mediaMetadata.platform}</div>
+                </div>
+                <div>
+                  <div style={{ color: T.text3, fontSize: 12, marginBottom: 4 }}>Word Count</div>
+                  <div style={{ color: T.text, fontWeight: 500 }}>{mediaMetadata.word_count}</div>
+                </div>
+                <div>
+                  <div style={{ color: T.text3, fontSize: 12, marginBottom: 4 }}>Transcript Method</div>
+                  <div style={{ color: T.text, fontWeight: 500 }}>{mediaMetadata.transcript_method || 'Multi-Source'}</div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Stats Overview */}
+        <AnimatePresence>
+          {claims.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 16, marginBottom: 24 }}
+            >
+              <div style={{ background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 20, padding: 16 }}>
+                <div style={{ fontSize: 24, fontWeight: 700, color: T.text }}>{stats.total_claims}</div>
+                <div style={{ fontFamily: T.mono, fontSize: 12, color: T.text3 }}>Total Claims</div>
+              </div>
+              <div style={{ background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 20, padding: 16 }}>
+                <div style={{ fontSize: 32, fontWeight: 700, color: T.red }}>{stats.high_risk}</div>
+                <div style={{ fontFamily: T.mono, fontSize: 12, color: T.text3 }}>High Risk</div>
+              </div>
+              <div style={{ background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 20, padding: 16 }}>
+                <div style={{ fontSize: 32, fontWeight: 700, color: T.warning }}>{stats.medium_risk}</div>
+                <div style={{ fontFamily: T.mono, fontSize: 12, color: T.text3 }}>Medium Risk</div>
+              </div>
+              <div style={{ background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 20, padding: 16 }}>
+                <div style={{ fontSize: 32, fontWeight: 700, color: T.success }}>{stats.low_risk}</div>
+                <div style={{ fontFamily: T.mono, fontSize: 12, color: T.text3 }}>Low Risk</div>
+              </div>
+              <div style={{ background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 20, padding: 16 }}>
+                <div style={{ fontSize: 32, fontWeight: 700, color: T.red }}>{stats.misinformation}</div>
+                <div style={{ fontFamily: T.mono, fontSize: 12, color: T.text3 }}>Misinformation</div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Filter */}
+        <AnimatePresence>
+          {claims.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              style={{ marginBottom: 24, display: 'flex', alignItems: 'center', gap: 12 }}
+            >
+              <span style={{ fontFamily: T.mono, fontSize: 12, color: T.text3 }}>Filter Claims:</span>
+              <select 
+                value={filter} 
+                onChange={(e) => setFilter(e.target.value)}
+                style={{
+                  padding: '10px 16px',
+                  background: T.bg2,
+                  border: `1px solid ${T.border}`,
+                  borderRadius: 12,
+                  color: T.text,
+                  fontFamily: T.mono,
+                  fontSize: 13,
+                }}
+              >
+                <option value="all">All Claims</option>
+                <option value="high">High Risk</option>
+                <option value="medium">Medium Risk</option>
+                <option value="low">Low Risk</option>
+                <option value="misinformation">Misinformation Only</option>
+              </select>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Claims List */}
+        <AnimatePresence>
+          {filteredClaims.map((claim, index) => {
+            const risk = getRiskLevel(claim.risk_score);
+            return (
+              <motion.div
+                key={claim.id}
+                initial={{ opacity: 0, y: 30 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                transition={{ delay: index * 0.05 }}
+                style={{
+                  background: T.bg2,
+                  border: `1px solid ${T.border}`,
+                  borderRadius: 24,
+                  padding: 40,
+                  marginBottom: 24,
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
+                  <div>
+                    <div style={{ fontFamily: T.mono, fontSize: 11, color: T.text3, marginBottom: 4 }}>CLAIM {index + 1}</div>
+                    <div style={{ fontSize: 18, fontWeight: 600, color: T.text, lineHeight: 1.5 }}>{claim.text}</div>
+                  </div>
+                  <div style={{
+                    padding: '8px 20px',
+                    background: `${risk.color}15`,
+                    color: risk.color,
+                    borderRadius: 999,
+                    fontFamily: T.mono,
+                    fontSize: 12,
+                    fontWeight: 600,
+                  }}>
+                    {risk.level}
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 24 }}>
+                  <div>
+                    <div style={{ fontFamily: T.mono, fontSize: 11, color: T.text3 }}>Domain</div>
+                    <div style={{ color: T.text, fontWeight: 500 }}>{claim.domain}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontFamily: T.mono, fontSize: 11, color: T.text3 }}>Claim Type</div>
+                    <div style={{ color: T.text, fontWeight: 500 }}>{claim.claim_type}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontFamily: T.mono, fontSize: 11, color: T.text3 }}>Confidence</div>
+                    <div style={{ color: T.text, fontWeight: 500 }}>{(claim.confidence * 100).toFixed(0)}%</div>
+                  </div>
+                  <div>
+                    <div style={{ fontFamily: T.mono, fontSize: 11, color: T.text3 }}>Validation</div>
+                    <div style={{ color: T.text, fontWeight: 500 }}>{claim.validation_result}</div>
+                  </div>
+                </div>
+
+                {claim.context && (
+                  <div style={{ marginTop: 32, padding: 24, background: '#fff', borderRadius: 16, border: `1px solid ${T.border}` }}>
+                    <div style={{ fontFamily: T.mono, fontSize: 11, color: T.text3, marginBottom: 8 }}>CONTEXT</div>
+                    <p style={{ color: T.text2, lineHeight: 1.7 }}>{claim.context}</p>
                   </div>
                 )}
-                
-                <div className="space-y-4">
-                  <div>
-                    <p className="text-xs text-gray-400 uppercase tracking-wider mb-2">Claim Text</p>
-                    <p className="text-white font-medium">{claim.text}</p>
-                  </div>
+              </motion.div>
+            );
+          })}
+        </AnimatePresence>
 
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div>
-                      <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">Domain</p>
-                      <p className="text-sm text-white">{claim.domain}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">Claim Type</p>
-                      <p className="text-sm text-white">{claim.claim_type}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">Confidence</p>
-                      <p className="text-sm text-white">{(claim.confidence * 100).toFixed(0)}%</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">Validation</p>
-                      <p className="text-sm text-white">{claim.validation_result}</p>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div>
-                      <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">Method Accuracy</p>
-                      <p className="text-sm text-white">{(claim.method_accuracy * 100).toFixed(0)}%</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">Evidence Count</p>
-                      <p className="text-sm text-white">{claim.evidence_count}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">Research Grade</p>
-                      <p className="text-sm text-white">{claim.research_grade ? 'Yes' : 'No'}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">Analysis Method</p>
-                      <p className="text-sm text-white">{claim.analysis_method}</p>
-                    </div>
-                  </div>
-
-                  {/* Risk Analysis */}
-                  <div className="border-t border-white/10 pt-4">
-                    <h4 className="text-sm font-medium text-white mb-3 flex items-center gap-2">
-                      <BarChart3 className="w-4 h-4 text-red-400" />
-                      Risk Analysis
-                    </h4>
-                    
-                    <div className="space-y-3">
-                      <MetricBar 
-                        label="Overall Risk" 
-                        value={claim.risk_score / 100} 
-                        color={getRiskColor(claim.risk_score)}
-                        highlight={claim.risk_score >= 70}
-                      />
-                      <MetricBar 
-                        label="Claim Validity" 
-                        value={claim.confidence} 
-                        color="bg-blue-500 shadow-[0_0_12px_rgba(0,100,255,0.5)]"
-                        highlight={claim.confidence > 0.7}
-                      />
-                      <MetricBar 
-                        label="Method Accuracy" 
-                        value={claim.method_accuracy} 
-                        color="bg-purple-500 shadow-[0_0_12px_rgba(128,0,255,0.5)]"
-                        highlight={claim.method_accuracy > 0.8}
-                      />
-                    </div>
-
-                    {/* Risk Factors */}
-                    <div className="mt-4 p-3 bg-obsidian/30 rounded-lg">
-                      <h5 className="text-xs font-medium text-gray-300 mb-2">Risk Factors</h5>
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
-                        <div className="flex items-center">
-                          <div className={`w-2 h-2 rounded-full mr-1 ${
-                            claim.risk_score >= 70 ? 'bg-red-500' : 'bg-gray-500'
-                          }`}></div>
-                          <span className="text-gray-400">High Risk Score</span>
-                        </div>
-                        <div className="flex items-center">
-                          <div className={`w-2 h-2 rounded-full mr-1 ${
-                            claim.confidence <= 0.5 ? 'bg-red-500' : 'bg-gray-500'
-                          }`}></div>
-                          <span className="text-gray-400">Low Validity</span>
-                        </div>
-                        <div className="flex items-center">
-                          <div className={`w-2 h-2 rounded-full mr-1 ${
-                            claim.method_accuracy <= 0.6 ? 'bg-red-500' : 'bg-gray-500'
-                          }`}></div>
-                          <span className="text-gray-400">Poor Method</span>
-                        </div>
-                        <div className="flex items-center">
-                          <div className={`w-2 h-2 rounded-full mr-1 ${
-                            claim.dataset_warning ? 'bg-orange-500' : 'bg-gray-500'
-                          }`}></div>
-                          <span className="text-gray-400">Dataset Issues</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {claim.context && (
-                    <div className="p-3 bg-obsidian/30 rounded-lg">
-                      <p className="text-xs font-medium text-gray-300 mb-1">Context</p>
-                      <p className="text-sm text-gray-400 italic">{claim.context}</p>
-                    </div>
-                  )}
-                </div>
-              </Panel>
-            </motion.div>
-          );
-        })}
-      </AnimatePresence>
-
-      {/* Transcript/Extracted Text Display */}
-      <AnimatePresence>
-        {transcript && !loading && claims.length === 0 && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-          >
-            <Panel title="Extracted Content" glow="cyan">
-              <div className="max-h-96 overflow-y-auto bg-obsidian/30 p-4 rounded-lg">
-                <p className="text-sm text-gray-300 whitespace-pre-wrap">{transcript}</p>
+        {/* Transcript Display */}
+        <AnimatePresence>
+          {transcript && !loading && claims.length === 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              style={{
+                background: T.bg2,
+                border: `1px solid ${T.border}`,
+                borderRadius: 24,
+                padding: 40,
+              }}
+            >
+              <div style={{ fontFamily: T.mono, fontSize: 11, letterSpacing: '0.2em', color: T.text3, marginBottom: 16 }}>EXTRACTED TRANSCRIPT</div>
+              <div style={{
+                background: '#fff',
+                border: `1px solid ${T.border}`,
+                borderRadius: 16,
+                padding: 32,
+                fontFamily: T.mono,
+                fontSize: 15,
+                lineHeight: 1.8,
+                color: T.text,
+                maxHeight: 400,
+                overflowY: 'auto',
+              }}>
+                {transcript}
               </div>
-            </Panel>
-          </motion.div>
-        )}
-      </AnimatePresence>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
     </div>
   );
 }

@@ -3,7 +3,6 @@ import {
   ScanFace,
   FileSearch,
   ArrowRight,
-  EyeOff,
   Shield,
   Zap,
   Clock,
@@ -14,49 +13,47 @@ import {
   X,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { useState, useEffect, useRef } from "react";
+import { useState } from "react";
 
 /* ─────────────────────────────────────────────
-   Design tokens — UPDATED FOR LIGHT MODE (White Background + Black Text)
+   Unified Design Tokens (Consistent with AuthPage)
 ───────────────────────────────────────────── */
 const T = {
-  bg:          "#ffffff",           // Main background: pure white
-  bg2:         "#f8f9fa",           // Light cards / surfaces
-  bg3:         "#f1f3f5",           // Ticker / subtle sections
-  surface:     "rgba(0,0,0,0.03)",  // Very subtle surface
-  border:      "rgba(0,0,0,0.08)",  // Light borders
+  bg: "#ffffff",
+  bg2: "#f8f9fa",
+  bg3: "#f1f3f5",
+  surface: "rgba(0,0,0,0.03)",
+  border: "rgba(0,0,0,0.08)",
   borderHover: "rgba(0,0,0,0.16)",
 
-  text:        "#0f172a",           // Main text: deep dark
-  text2:       "#475569",           // Secondary text
-  text3:       "#64748b",           // Muted text
+  text: "#0f172a",
+  text2: "#475569",
+  text3: "#64748b",
 
-  violet:      "#7c3aed",           // Slightly adjusted violet for light mode
-  violetMid:   "rgba(124,58,237,0.12)",
-  violetSoft:  "rgba(124,58,237,0.06)",
-  violetGlow:  "rgba(124,58,237,0.25)",
+  violet: "#7c3aed",
+  violetMid: "rgba(124,58,237,0.12)",
+  violetSoft: "rgba(124,58,237,0.06)",
+  violetGlow: "rgba(124,58,237,0.25)",
 
-  blue:        "#2563eb",
-  blueMid:     "rgba(37,99,235,0.12)",
-  blueSoft:    "rgba(37,99,235,0.06)",
-  blueGlow:    "rgba(37,99,235,0.25)",
+  blue: "#2563eb",
+  blueMid: "rgba(37,99,235,0.12)",
+  blueSoft: "rgba(37,99,235,0.06)",
+  blueGlow: "rgba(37,99,235,0.25)",
 
-  red:         "#ef4444",
-  redSoft:     "rgba(239,68,68,0.12)",
+  red: "#ef4444",
+  redSoft: "rgba(239,68,68,0.12)",
 
-  cyan:        "#06b6d4",
-  cyanSoft:    "rgba(6,182,212,0.10)",
+  cyan: "#06b6d4",
+  cyanSoft: "rgba(6,182,212,0.10)",
 
-  mono:        '"JetBrains Mono", monospace',
-  serif:       '"Playfair Display", Georgia, serif',
-  sans:        '"Inter", -apple-system, sans-serif',
+  mono: '"JetBrains Mono", monospace',
+  serif: '"Playfair Display", Georgia, serif',
+  sans: '"Inter", system-ui, sans-serif',
 };
 
-/* ─────────────────────────────────────────────
-   Reusable animation variants (unchanged)
-───────────────────────────────────────────── */
+/* Animation Variants */
 const fadeUp = {
-  hidden:  { opacity: 0, y: 28 },
+  hidden: { opacity: 0, y: 28 },
   visible: (i = 0) => ({
     opacity: 1,
     y: 0,
@@ -65,13 +62,11 @@ const fadeUp = {
 };
 
 const scaleIn = {
-  hidden:  { opacity: 0, scale: 0.92 },
+  hidden: { opacity: 0, scale: 0.92 },
   visible: { opacity: 1, scale: 1, transition: { duration: 0.6, ease: [0.22, 1, 0.36, 1] } },
 };
 
-/* ─────────────────────────────────────────────
-   Ticker — Updated colors for light mode
-───────────────────────────────────────────── */
+/* Ticker */
 const TICKER_ITEMS = [
   "Deepfake incidents ↑ 900% YOY",
   "96 active misinfo campaigns detected",
@@ -119,7 +114,8 @@ function Ticker() {
           >
             <span
               style={{
-                width: 4, height: 4,
+                width: 4,
+                height: 4,
                 background: T.violet,
                 borderRadius: "50%",
                 opacity: 0.7,
@@ -134,146 +130,7 @@ function Ticker() {
   );
 }
 
-/* ─────────────────────────────────────────────
-   Sticky Nav — Light mode adjustments
-───────────────────────────────────────────── */
-function Nav({ onManifesto }: { onManifesto: () => void }) {
-  const navigate = useNavigate();
-  const [scrolled, setScrolled] = useState(false);
-
-  useEffect(() => {
-    const handler = () => setScrolled(window.scrollY > 20);
-    window.addEventListener("scroll", handler);
-    return () => window.removeEventListener("scroll", handler);
-  }, []);
-
-  return (
-    <nav
-      style={{
-        position: "sticky",
-        top: 0,
-        zIndex: 100,
-        backdropFilter: "blur(20px)",
-        background: scrolled ? "rgba(255,255,255,0.95)" : "rgba(255,255,255,0.85)",
-        borderBottom: `1px solid ${scrolled ? T.border : "transparent"}`,
-        padding: "0 40px",
-        height: 60,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        transition: "background 0.3s, border-color 0.3s",
-      }}
-    >
-      {/* Logo */}
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <div
-          style={{
-            width: 32, height: 32,
-            background: T.violetMid,
-            border: `1px solid rgba(124,58,237,0.35)`,
-            borderRadius: 8,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            color: T.violet,
-          }}
-        >
-          <Shield size={15} strokeWidth={1.8} />
-        </div>
-        <div>
-          <div style={{ fontSize: 15, fontWeight: 800, letterSpacing: "-0.02em", color: T.text, fontFamily: T.sans }}>
-            MADMAX
-          </div>
-          <div style={{ fontSize: 9, fontFamily: T.mono, letterSpacing: "0.18em", textTransform: "uppercase", color: "rgba(124,58,237,0.7)", marginTop: 1 }}>
-            Reality Defense
-          </div>
-        </div>
-      </div>
-
-      {/* Nav links */}
-      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-        {["Capabilities", "Features", "Mission"].map((label) => (
-          <NavLink key={label} onClick={() => {
-            document.getElementById(label.toLowerCase())?.scrollIntoView({ behavior: "smooth" });
-          }}>
-            {label}
-          </NavLink>
-        ))}
-      </div>
-
-      {/* Right */}
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <span style={{ fontFamily: T.mono, fontSize: 10, letterSpacing: "0.1em", color: T.text3, display: "flex", alignItems: "center", gap: 6 }}>
-          <PulseDot color="#22c55e" />
-          Systems nominal
-        </span>
-        <motion.button
-          onClick={() => navigate("/home/deepfake")}
-          whileHover={{ opacity: 0.88, y: -1 }}
-          whileTap={{ scale: 0.97 }}
-          style={{
-            fontFamily: T.mono,
-            fontSize: 12,
-            letterSpacing: "0.08em",
-            fontWeight: 600,
-            color: "#fff",
-            background: `linear-gradient(135deg, ${T.violet}, #6d28d9)`,
-            border: "none",
-            borderRadius: 7,
-            padding: "7px 16px",
-            cursor: "pointer",
-          }}
-        >
-          Enter Lab
-        </motion.button>
-      </div>
-    </nav>
-  );
-}
-
-function NavLink({ onClick, children }: { onClick: () => void; children: React.ReactNode }) {
-  const [hovered, setHovered] = useState(false);
-  return (
-    <button
-      onClick={onClick}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      style={{
-        fontFamily: T.mono,
-        fontSize: 12,
-        letterSpacing: "0.08em",
-        color: hovered ? T.text : T.text2,
-        background: hovered ? T.surface : "none",
-        border: "none",
-        borderRadius: 6,
-        padding: "6px 12px",
-        cursor: "pointer",
-        transition: "color 0.2s, background 0.2s",
-      }}
-    >
-      {children}
-    </button>
-  );
-}
-
-function PulseDot({ color }: { color: string }) {
-  return (
-    <motion.span
-      animate={{ boxShadow: [`0 0 0 0 ${color}80`, `0 0 0 5px ${color}00`] }}
-      transition={{ duration: 2, repeat: Infinity }}
-      style={{
-        display: "inline-block",
-        width: 6, height: 6,
-        background: color,
-        borderRadius: "50%",
-      }}
-    />
-  );
-}
-
-/* ─────────────────────────────────────────────
-   Hero — Light mode
-───────────────────────────────────────────── */
+/* Hero */
 function Hero({ onManifesto }: { onManifesto: () => void }) {
   const navigate = useNavigate();
 
@@ -291,11 +148,12 @@ function Hero({ onManifesto }: { onManifesto: () => void }) {
         alignItems: "center",
       }}
     >
-      {/* Left */}
       <div>
-        {/* Eyebrow */}
         <motion.div
-          variants={fadeUp} initial="hidden" animate="visible" custom={0}
+          variants={fadeUp}
+          initial="hidden"
+          animate="visible"
+          custom={0}
           style={{
             display: "inline-flex",
             alignItems: "center",
@@ -318,7 +176,8 @@ function Hero({ onManifesto }: { onManifesto: () => void }) {
             transition={{ duration: 1.6, repeat: Infinity }}
             style={{
               display: "inline-block",
-              width: 6, height: 6,
+              width: 6,
+              height: 6,
               background: T.red,
               borderRadius: "50%",
             }}
@@ -326,9 +185,11 @@ function Hero({ onManifesto }: { onManifesto: () => void }) {
           Reality Integrity Warning
         </motion.div>
 
-        {/* Title */}
         <motion.h1
-          variants={fadeUp} initial="hidden" animate="visible" custom={1}
+          variants={fadeUp}
+          initial="hidden"
+          animate="visible"
+          custom={1}
           style={{
             fontFamily: T.serif,
             fontSize: "clamp(38px, 5vw, 58px)",
@@ -355,9 +216,11 @@ function Hero({ onManifesto }: { onManifesto: () => void }) {
           </span>
         </motion.h1>
 
-        {/* Description */}
         <motion.p
-          variants={fadeUp} initial="hidden" animate="visible" custom={2}
+          variants={fadeUp}
+          initial="hidden"
+          animate="visible"
+          custom={2}
           style={{
             fontFamily: T.sans,
             fontSize: 16,
@@ -372,13 +235,15 @@ function Hero({ onManifesto }: { onManifesto: () => void }) {
           real — before damage is done.
         </motion.p>
 
-        {/* Actions */}
         <motion.div
-          variants={fadeUp} initial="hidden" animate="visible" custom={3}
+          variants={fadeUp}
+          initial="hidden"
+          animate="visible"
+          custom={3}
           style={{ display: "flex", gap: 12, flexWrap: "wrap" }}
         >
           <motion.button
-            onClick={() => navigate("/home/deepfake")}
+            onClick={() => navigate("/auth")}
             whileHover={{ y: -2, boxShadow: `0 8px 32px ${T.violetGlow}` }}
             whileTap={{ scale: 0.97 }}
             style={{
@@ -397,8 +262,6 @@ function Hero({ onManifesto }: { onManifesto: () => void }) {
               textTransform: "uppercase",
               cursor: "pointer",
               boxShadow: `0 0 24px ${T.violetGlow}`,
-              position: "relative",
-              overflow: "hidden",
             }}
           >
             <ScanFace size={14} />
@@ -433,7 +296,6 @@ function Hero({ onManifesto }: { onManifesto: () => void }) {
         </motion.div>
       </div>
 
-      {/* Right — Stat Card */}
       <motion.div variants={scaleIn} initial="hidden" animate="visible">
         <StatCard />
       </motion.div>
@@ -460,16 +322,17 @@ function StatCard() {
         overflow: "hidden",
       }}
     >
-      {/* Top shine */}
       <div
         style={{
           position: "absolute",
-          top: 0, left: 0, right: 0, height: 1,
+          top: 0,
+          left: 0,
+          right: 0,
+          height: 1,
           background: `linear-gradient(90deg, transparent, rgba(124,58,237,0.5), transparent)`,
         }}
       />
 
-      {/* Label */}
       <div
         style={{
           fontFamily: T.mono,
@@ -483,11 +346,10 @@ function StatCard() {
           gap: 6,
         }}
       >
-        <PulseDot color={T.red} />
+        <div style={{ width: 6, height: 6, background: T.red, borderRadius: "50%" }} />
         Global Threat Snapshot
       </div>
 
-      {/* Stat grid */}
       <div
         style={{
           display: "grid",
@@ -509,7 +371,6 @@ function StatCard() {
               borderRadius: 10,
               padding: 16,
               transition: "all 0.2s",
-              cursor: "default",
             }}
           >
             <div
@@ -530,7 +391,6 @@ function StatCard() {
                 fontSize: s.small ? 14 : 20,
                 fontWeight: 600,
                 color: s.color,
-                paddingTop: s.small ? 3 : 0,
               }}
             >
               {s.value}
@@ -539,7 +399,6 @@ function StatCard() {
         ))}
       </div>
 
-      {/* Alert row */}
       <div
         style={{
           display: "flex",
@@ -561,11 +420,7 @@ function StatCard() {
   );
 }
 
-/* ─────────────────────────────────────────────
-   Capabilities, Features, Mission, CTA, Footer, Modal, etc.
-   (Only color-related changes applied — rest remains structurally identical)
-───────────────────────────────────────────── */
-
+/* Capabilities */
 function Capabilities() {
   const navigate = useNavigate();
 
@@ -654,7 +509,6 @@ function CapCard({ card, delay }: { card: any; delay: number }) {
         gap: 0,
       }}
     >
-      {/* Hover glow overlay */}
       <div
         style={{
           position: "absolute",
@@ -666,10 +520,10 @@ function CapCard({ card, delay }: { card: any; delay: number }) {
         }}
       />
 
-      {/* Icon */}
       <div
         style={{
-          width: 48, height: 48,
+          width: 48,
+          height: 48,
           borderRadius: 12,
           background: card.iconBg,
           border: `1px solid ${card.iconBorder}`,
@@ -713,6 +567,7 @@ function CapCard({ card, delay }: { card: any; delay: number }) {
   );
 }
 
+/* Features */
 const FEATURES = [
   { icon: <Shield size={16} />, color: T.violet, colorBg: "rgba(124,58,237,0.08)", colorBorder: "rgba(124,58,237,0.18)", title: "Multi-Modal Analysis", desc: "Simultaneous inspection of video, audio, image, and text signals in a single pass." },
   { icon: <Clock size={16} />, color: T.blue, colorBg: "rgba(37,99,235,0.08)", colorBorder: "rgba(37,99,235,0.18)", title: "Real-Time Detection", desc: "Sub-second artifact identification as content is captured or uploaded." },
@@ -765,7 +620,8 @@ function Features() {
           >
             <div
               style={{
-                width: 36, height: 36,
+                width: 36,
+                height: 36,
                 borderRadius: 8,
                 background: f.colorBg,
                 border: `1px solid ${f.colorBorder}`,
@@ -791,11 +647,12 @@ function Features() {
   );
 }
 
+/* Mission */
 const WHY_STATS = [
-  { val: "96M",  color: "#ef4444",  label: "AI-generated images circulating on social media daily",          tag: "Critical", tagBg: "rgba(239,68,68,0.1)",   tagColor: "#ef4444" },
-  { val: "4 min",color: "#fb923c",  label: "Average time for a deepfake to spread to 1,000 accounts",        tag: "High",     tagBg: "rgba(251,146,60,0.1)",  tagColor: "#fb923c" },
-  { val: "68%",  color: "#7c3aed",  label: "People who cannot distinguish synthetic audio from real speech",  tag: "Urgent",   tagBg: "rgba(124,58,237,0.12)", tagColor: "#7c3aed" },
-  { val: "↓ 31%",color: T.text2,   label: "Global trust in online information since 2020",                   tag: "Trend",    tagBg: "rgba(0,0,0,0.05)", tagColor: T.text3   },
+  { val: "96M", color: "#ef4444", label: "AI-generated images circulating on social media daily", tag: "Critical", tagBg: "rgba(239,68,68,0.1)", tagColor: "#ef4444" },
+  { val: "4 min", color: "#fb923c", label: "Average time for a deepfake to spread to 1,000 accounts", tag: "High", tagBg: "rgba(251,146,60,0.1)", tagColor: "#fb923c" },
+  { val: "68%", color: "#7c3aed", label: "People who cannot distinguish synthetic audio from real speech", tag: "Urgent", tagBg: "rgba(124,58,237,0.12)", tagColor: "#7c3aed" },
+  { val: "↓ 31%", color: T.text2, label: "Global trust in online information since 2020", tag: "Trend", tagBg: "rgba(0,0,0,0.05)", tagColor: T.text3 },
 ];
 
 function Mission({ onManifesto }: { onManifesto: () => void }) {
@@ -812,7 +669,6 @@ function Mission({ onManifesto }: { onManifesto: () => void }) {
       }}
     >
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 64, alignItems: "center" }}>
-        {/* Stats */}
         <motion.div
           initial={{ opacity: 0, x: -24 }}
           whileInView={{ opacity: 1, x: 0 }}
@@ -866,7 +722,6 @@ function Mission({ onManifesto }: { onManifesto: () => void }) {
           ))}
         </motion.div>
 
-        {/* Quote + text */}
         <motion.div
           initial={{ opacity: 0, x: 24 }}
           whileInView={{ opacity: 1, x: 0 }}
@@ -944,6 +799,7 @@ function Mission({ onManifesto }: { onManifesto: () => void }) {
   );
 }
 
+/* CtaBanner */
 function CtaBanner() {
   const navigate = useNavigate();
 
@@ -967,25 +823,6 @@ function CtaBanner() {
           gap: 32,
         }}
       >
-        {/* Gradient bg */}
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            background: `linear-gradient(135deg, rgba(124,58,237,0.06) 0%, rgba(37,99,235,0.04) 100%)`,
-            pointerEvents: "none",
-          }}
-        />
-        {/* Top shine */}
-        <div
-          style={{
-            position: "absolute",
-            top: 0, left: 0, right: 0, height: 1,
-            background: `linear-gradient(90deg, transparent, rgba(124,58,237,0.4), rgba(37,99,235,0.4), transparent)`,
-          }}
-        />
-
-        {/* Body */}
         <div style={{ position: "relative", zIndex: 1 }}>
           <div
             style={{
@@ -1000,7 +837,7 @@ function CtaBanner() {
               gap: 6,
             }}
           >
-            <PulseDot color="#22c55e" />
+            <div style={{ width: 6, height: 6, background: "#22c55e", borderRadius: "50%" }} />
             System Ready — No Queue
           </div>
           <div style={{ fontFamily: T.serif, fontSize: 28, fontWeight: 800, letterSpacing: "-0.02em", marginBottom: 8, color: T.text }}>
@@ -1011,7 +848,6 @@ function CtaBanner() {
           </div>
         </div>
 
-        {/* Actions */}
         <div style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column", gap: 10, minWidth: 200 }}>
           <motion.button
             onClick={() => navigate("/home/deepfake")}
@@ -1073,6 +909,7 @@ function CtaBanner() {
   );
 }
 
+/* Footer */
 function Footer() {
   return (
     <footer
@@ -1106,8 +943,8 @@ function Footer() {
               transition: "color 0.2s",
               padding: 0,
             }}
-            onMouseEnter={e => (e.currentTarget.style.color = T.text2)}
-            onMouseLeave={e => (e.currentTarget.style.color = T.text3)}
+            onMouseEnter={(e) => (e.currentTarget.style.color = T.text2)}
+            onMouseLeave={(e) => (e.currentTarget.style.color = T.text3)}
           >
             {label}
           </button>
@@ -1117,13 +954,8 @@ function Footer() {
   );
 }
 
+/* Manifesto Modal */
 function ManifestoModal({ open, onClose }: { open: boolean; onClose: () => void }) {
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [onClose]);
-
   return (
     <AnimatePresence>
       {open && (
@@ -1161,16 +993,17 @@ function ManifestoModal({ open, onClose }: { open: boolean; onClose: () => void 
               position: "relative",
             }}
           >
-            {/* Top shine */}
             <div
               style={{
                 position: "absolute",
-                top: 0, left: 0, right: 0, height: 1,
+                top: 0,
+                left: 0,
+                right: 0,
+                height: 1,
                 background: `linear-gradient(90deg, transparent, rgba(124,58,237,0.6), transparent)`,
               }}
             />
 
-            {/* Header */}
             <div
               style={{
                 padding: "28px 32px 20px",
@@ -1201,14 +1034,13 @@ function ManifestoModal({ open, onClose }: { open: boolean; onClose: () => void 
                   lineHeight: 1,
                   transition: "color 0.2s",
                 }}
-                onMouseEnter={e => (e.currentTarget.style.color = T.text)}
-                onMouseLeave={e => (e.currentTarget.style.color = T.text3)}
+                onMouseEnter={(e) => (e.currentTarget.style.color = T.text)}
+                onMouseLeave={(e) => (e.currentTarget.style.color = T.text3)}
               >
                 <X size={18} />
               </motion.button>
             </div>
 
-            {/* Body */}
             <div style={{ padding: "28px 32px" }}>
               <p style={{ fontFamily: T.sans, fontSize: 14.5, color: T.text2, lineHeight: 1.75, marginBottom: 16 }}>
                 Artificial intelligence has eliminated the cost of deception.
@@ -1255,7 +1087,6 @@ function SectionEyebrow({ children, style }: { children: React.ReactNode; style?
 function Background() {
   return (
     <>
-      {/* Dot grid — light version */}
       <div
         style={{
           position: "fixed",
@@ -1269,7 +1100,6 @@ function Background() {
           zIndex: 0,
         }}
       />
-      {/* Ambient orbs — softer for light mode */}
       <div style={{ position: "fixed", inset: 0, pointerEvents: "none", zIndex: 0 }}>
         <div style={{ position: "absolute", width: 600, height: 600, top: -200, left: -200, background: "rgba(124,58,237,0.08)", borderRadius: "50%", filter: "blur(140px)" }} />
         <div style={{ position: "absolute", width: 500, height: 500, bottom: 0, right: -150, background: "rgba(37,99,235,0.07)", borderRadius: "50%", filter: "blur(140px)" }} />
@@ -1280,7 +1110,7 @@ function Background() {
 }
 
 /* ─────────────────────────────────────────────
-   HomePage — root export (now fully light mode)
+   HomePage — Full Export
 ───────────────────────────────────────────── */
 export const HomePage = () => {
   const [showManifesto, setShowManifesto] = useState(false);
@@ -1296,7 +1126,6 @@ export const HomePage = () => {
         position: "relative",
       }}
     >
-      {/* Google Fonts */}
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:wght@700;800&family=JetBrains+Mono:wght@400;600&display=swap');
         * { box-sizing: border-box; }
@@ -1305,7 +1134,6 @@ export const HomePage = () => {
       `}</style>
 
       <Background />
-      <Nav onManifesto={() => setShowManifesto(true)} />
       <Ticker />
       <Hero onManifesto={() => setShowManifesto(true)} />
       <div style={{ borderTop: `1px solid ${T.border}` }} />
